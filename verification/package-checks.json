@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-09-07T07:05:20.184505+00:00",
+  "python_syntax": {
+    "files": 4,
+    "status": "PASS"
+  },
+  "default_profile_consistency": "PASS",
+  "referenced_local_files": "PASS",
+  "windows_probe_on_linux": {
+    "exit_code": 2,
+    "status": "NOT RUN",
+    "message": "XInput requires Windows; no device test was performed."
+  },
+  "native_builds": {
+    "android": "NOT RUN",
+    "windows": "NOT RUN"
+  },
+  "scope": "package consistency and portable reference checks, no physical performance measurements"
+}

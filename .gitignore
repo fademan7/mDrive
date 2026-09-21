@@ -1,0 +1,42 @@
+.tools/
+.gradle/
+.android/
+**/bin/
+**/obj/
+android/.gradle/
+android/app/build/
+*.user
+*.suo
+
+# Local tooling, caches and machine-specific Android configuration
+.kotlin/
+**/.kotlin/
+**/build/
+android/local.properties
+.idea/
+.vs/
+__pycache__/
+*.py[cod]
+
+# Generated distributions and optional third-party CPU models
+/release/
+*.apk
+*.aab
+*.gguf
+*.zip
+
+# Pairing screenshots, device dumps and raw logs may contain private data.
+# Keep only the reviewed human-readable validation reports.
+/artifacts/*
+!/artifacts/validation/
+/artifacts/validation/*
+!/artifacts/validation/*.md
+*.log
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem

@@ -1,0 +1,42 @@
+test_fixed_xinput_mapping_and_simultaneous_pedals (test_controller_core.AnalogTests.test_fixed_xinput_mapping_and_simultaneous_pedals) ... ok
+test_nonfinite_controls_rejected (test_controller_core.AnalogTests.test_nonfinite_controls_rejected) ... ok
+test_pointer_reorder_cannot_steal_pedal (test_controller_core.AnalogTests.test_pointer_reorder_cannot_steal_pedal) ... ok
+test_stick_monotonicity_and_bounds (test_controller_core.AnalogTests.test_stick_monotonicity_and_bounds) ... ok
+test_touch_down_starts_at_zero_then_release_is_immediate (test_controller_core.AnalogTests.test_touch_down_starts_at_zero_then_release_is_immediate) ... ok
+test_trigger_all_codes_and_error_bound (test_controller_core.AnalogTests.test_trigger_all_codes_and_error_bound) ... ok
+test_f1_bad_length_id_version_and_player_rejected (test_controller_core.F1LayoutTests.test_f1_bad_length_id_version_and_player_rejected) ... ok
+test_nonfinite_telemetry_rejected (test_controller_core.F1LayoutTests.test_nonfinite_telemetry_rejected) ... ok
+test_official_2025_offsets_and_wheel_order (test_controller_core.F1LayoutTests.test_official_2025_offsets_and_wheel_order) ... ok
+test_unknown_2026_format_cannot_silently_use_2025_parser (test_controller_core.F1LayoutTests.test_unknown_2026_format_cannot_silently_use_2025_parser) ... ok
+test_deadzone_continuity_and_full_scale (test_controller_core.GeometryTests.test_deadzone_continuity_and_full_scale) ... ok
+test_filter_rejects_invalid_timestamps (test_controller_core.GeometryTests.test_filter_rejects_invalid_timestamps) ... ok
+test_filter_step_has_expected_time_constant (test_controller_core.GeometryTests.test_filter_step_has_expected_time_constant) ... ok
+test_invariant_under_common_world_rotation (test_controller_core.GeometryTests.test_invariant_under_common_world_rotation) ... ok
+test_known_angles_including_clockwise_sign (test_controller_core.GeometryTests.test_known_angles_including_clockwise_sign) ... ok
+test_noncommuting_center_uses_correct_multiplication_order (test_controller_core.GeometryTests.test_noncommuting_center_uses_correct_multiplication_order) ... ok
+test_quaternion_sign_and_scale_do_not_change_orientation (test_controller_core.GeometryTests.test_quaternion_sign_and_scale_do_not_change_orientation) ... ok
+test_zero_and_singular_quaternions_rejected (test_controller_core.GeometryTests.test_zero_and_singular_quaternions_rejected) ... ok
+test_engine_and_shift_disabled_by_default (test_controller_core.HapticTests.test_engine_and_shift_disabled_by_default) ... ok
+test_explicit_stop_cancels_active_warning (test_controller_core.HapticTests.test_explicit_stop_cancels_active_warning) ... ok
+test_lock_preempts_curb_and_no_old_curb_is_replayed (test_controller_core.HapticTests.test_lock_preempts_curb_and_no_old_curb_is_replayed) ... ok
+test_refresh_does_not_restart_pattern (test_controller_core.HapticTests.test_refresh_does_not_restart_pattern) ... ok
+test_stale_event_and_excessive_lease_are_dropped (test_controller_core.HapticTests.test_stale_event_and_excessive_lease_are_dropped) ... ok
+test_all_truncations_and_trailing_data_rejected (test_controller_core.ProtocolTests.test_all_truncations_and_trailing_data_rejected) ... ok
+test_authenticated_but_semantically_invalid_packet_rejected (test_controller_core.ProtocolTests.test_authenticated_but_semantically_invalid_packet_rejected) ... ok
+test_every_single_bit_modification_rejected (test_controller_core.ProtocolTests.test_every_single_bit_modification_rejected) ... ok
+test_fixed_layout_and_byte_order (test_controller_core.ProtocolTests.test_fixed_layout_and_byte_order) ... ok
+test_sequence_wrap_duplicates_and_half_range (test_controller_core.ProtocolTests.test_sequence_wrap_duplicates_and_half_range) ... ok
+test_wrong_key_or_session_rejected (test_controller_core.ProtocolTests.test_wrong_key_or_session_rejected) ... ok
+test_background_and_recalibration_disarm_immediately (test_controller_core.SafetyTests.test_background_and_recalibration_disarm_immediately) ... ok
+test_delayed_new_packet_rejected_by_receiver_clock_challenge (test_controller_core.SafetyTests.test_delayed_new_packet_rejected_by_receiver_clock_challenge) ... ok
+test_disconnect_timeout_and_no_automatic_rearm (test_controller_core.SafetyTests.test_disconnect_timeout_and_no_automatic_rearm) ... ok
+test_nonzero_throttle_cannot_arm (test_controller_core.SafetyTests.test_nonzero_throttle_cannot_arm) ... ok
+test_phone_clock_offset_is_not_used_as_network_latency (test_controller_core.SafetyTests.test_phone_clock_offset_is_not_used_as_network_latency) ... ok
+test_replayed_packet_does_not_refresh_watchdog (test_controller_core.SafetyTests.test_replayed_packet_does_not_refresh_watchdog) ... ok
+test_requires_neutral_dwell_and_rising_arm_edge (test_controller_core.SafetyTests.test_requires_neutral_dwell_and_rising_arm_edge) ... ok
+test_unknown_acknowledgement_rejected (test_controller_core.SafetyTests.test_unknown_acknowledgement_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 0.016s
+
+OK

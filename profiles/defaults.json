@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "purpose": "Unmeasured starting configuration; requires native implementation and device validation",
+  "device": {
+    "name": "Galaxy Z Fold5",
+    "preferred_posture": "folded_cover_landscape",
+    "disarm_on_window_or_posture_change": true
+  },
+  "steering": {
+    "preferred_sensor": "TYPE_GAME_ROTATION_VECTOR",
+    "requested_period_us": 5000,
+    "max_report_latency_us": 0,
+    "half_range_deg": 90,
+    "sign": -1,
+    "deadzone_deg": 0.5,
+    "filter_tau_ms": 8,
+    "sensor_stale_ms": 100,
+    "prediction_enabled": false,
+    "automatic_recenter_enabled": false
+  },
+  "pedals": {
+    "mode": "relative_vertical_drag",
+    "travel_dp": 72,
+    "touch_down_value": 0,
+    "release_value": 0,
+    "independent_simultaneous_input": true
+  },
+  "transport": {
+    "protocol": "PWR1",
+    "pc_control_port": 26760,
+    "phone_send_hz": 120,
+    "pc_status_hz": 20,
+    "pc_worker_target_hz": 250,
+    "authentication_required": true,
+    "input_timeout_ms": 150,
+    "ack_freshness_ms": 100,
+    "neutral_dwell_ms": 300
+  },
+  "output": {
+    "backend_candidate": "ViGEm_Xbox360",
+    "validated_on_windows": true,
+    "validation_scope": "ViGEm native load and XInput LX/LT/RT observation on one Windows 11 x64 PC; games not run",
+    "observed_driver_version": "1.21.442.0",
+    "steering_axis": "LX",
+    "brake_axis": "LT",
+    "throttle_axis": "RT"
+  },
+  "telemetry": {
+    "f1": {
+      "enabled": false,
+      "validated_with_real_capture": false,
+      "game": "F1 25 / 2026 Season Pack",
+      "udp_format": 2025,
+      "bind_address": "127.0.0.1",
+      "port": 20777,
+      "fast_data_max_age_ms": 100,
+      "max_join_skew_ms": 50
+    },
+    "assetto_corsa_original": {
+      "enabled": false,
+      "sdk_layout_verified": false,
+      "validated_with_real_capture": false
+    }
+  },
+  "detectors": {
+    "enabled_after_validation": ["lock", "spin"],
+    "slip_semantics_verified": false,
+    "lock_on": null,
+    "lock_off": null,
+    "spin_on": null,
+    "spin_off": null,
+    "minimum_forward_speed_mps": 10,
+    "minimum_corresponding_pedal": 0.1,
+    "minimum_condition_duration_ms": 30
+  },
+  "haptics": {
+    "raw_gamepad_rumble_passthrough": false,
+    "engine_enabled": false,
+    "shift_enabled": false,
+    "curb_enabled": false,
+    "collision_enabled": false,
+    "notification_max_hz": 30,
+    "lease_ms": 100,
+    "max_lease_ms": 150,
+    "repeat_cadence_min_ms": 250,
+    "waveform_amplitude_candidates": [64, 128, 220],
+    "lock_pattern_ms": [20, 60, 20],
+    "lock_pattern_states": ["on", "off", "on"],
+    "spin_pattern_ms": [60],
+    "spin_pattern_states": ["on"],
+    "capability_check_required": true
+  }
+}

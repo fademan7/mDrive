@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\PhoneWheel.Core\PhoneWheel.Core.csproj" />
+    <Compile Include="..\..\src\PhoneWheel.Host\WendyService.cs" Link="WendyService.cs" />
+    <Compile Include="..\..\src\PhoneWheel.Host\CpuIntentModel.cs" Link="CpuIntentModel.cs" />
+    <Compile Include="..\..\src\PhoneWheel.Host\CpuProcessJob.cs" Link="CpuProcessJob.cs" />
+    <Compile Include="..\..\src\PhoneWheel.Host\WendyRecommendationStore.cs" Link="WendyRecommendationStore.cs" />
+  </ItemGroup>
+</Project>

@@ -25,6 +25,8 @@ object Pwr1 {
     const val TAG = 16
     const val ARM = 1
     const val READY = 0xE
+    const val FAST_RECOVERY = 0x10
+    const val RECOVERING = 9
 
     fun newer(candidate: UInt, previous: UInt): Boolean {
         val distance = candidate - previous
@@ -35,7 +37,7 @@ object Pwr1 {
 
     fun encodeControl(frame: ControlFrame, key: ByteArray): ByteArray {
         frame.controls.validate()
-        require((frame.flags.toInt() and 0xF.inv()) == 0)
+        require((frame.flags.toInt() and 0x1F.inv()) == 0)
         val look = frame.header.kind == PacketKind.CONTROL_LOOK
         require(look || (frame.controls.lookX == 0f && frame.controls.lookY == 0f))
         val p = ByteBuffer.allocate(if (look) 28 else 20).order(ByteOrder.LITTLE_ENDIAN)
@@ -46,7 +48,7 @@ object Pwr1 {
     }
 
     fun encodeStatus(frame: StatusFrame, key: ByteArray): ByteArray {
-        require(frame.state in 0..1 && frame.reason in 0..8)
+        require(frame.state in 0..1 && frame.reason in 0..9)
         return encode(frame.header, byteArrayOf(frame.state.toByte(), frame.reason.toByte(), 0, 0), key)
     }
 
@@ -64,7 +66,7 @@ object Pwr1 {
         var c = Controls(b.float, b.float, b.float, b.short.toUShort())
         val flags = b.short.toUShort(); val epoch = b.int.toUInt()
         if (look) c = c.copy(lookX = b.float, lookY = b.float)
-        c.validate(); require((flags.toInt() and 0xF.inv()) == 0)
+        c.validate(); require((flags.toInt() and 0x1F.inv()) == 0)
         return ControlFrame(h, c, flags, epoch)
     }
 
@@ -75,7 +77,7 @@ object Pwr1 {
         val (h, p) = decode(packet, key, session, PacketKind.STATUS, 4)
         require(p[2] == 0.toByte() && p[3] == 0.toByte())
         val state = p[0].toUByte().toInt(); val reason = p[1].toUByte().toInt()
-        require(state in 0..1 && reason in 0..8)
+        require(state in 0..1 && reason in 0..9)
         return StatusFrame(h, state, reason)
     }
 

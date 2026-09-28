@@ -29,7 +29,7 @@ internal class WendyClient(private val details: PairingDetails, private val onSt
                 Socket().use { active ->
                     socket = active
                     active.tcpNoDelay = true; active.soTimeout = 2000
-                    active.connect(InetSocketAddress(if (details.usb) "127.0.0.1" else details.host, 26762), 1500)
+                    active.connect(InetSocketAddress(details.host, 26762), 1500)
                     val input = DataInputStream(active.getInputStream()); val output = DataOutputStream(active.getOutputStream())
                     val nonce = ByteArray(32); input.readFully(nonce)
                     var sequence = 0L

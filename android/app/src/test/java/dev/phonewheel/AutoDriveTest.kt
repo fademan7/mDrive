@@ -6,6 +6,17 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 class AutoDriveTest {
+    @Test fun recoveryKeepsIntentOnlyWhileConnectionSensorAndFocusAreHealthy() {
+        for (fault in listOf("none", "sensor", "focus", "connection", "hard")) {
+            val a = AutoDrive(); a.request(false)
+            for (t in 0L..650L step 50) tick(a, t)
+            assertEquals(AutoDriveAction.ARM, tick(a, 700)); tick(a, 750, active = true)
+            val result = a.tick(800, q, fault != "sensor", fault != "focus", true,
+                fault != "connection", false, false, fault != "hard")
+            assertEquals(if (fault == "none") AutoDriveAction.NONE else AutoDriveAction.RELEASE, result)
+            if (fault == "none") assertEquals(AutoDriveAction.NONE, tick(a, 850, active = true, touch = true, neutral = false))
+        }
+    }
     private val q = Quaternion(1.0, 0.0, 0.0, 0.0)
     private fun tick(a: AutoDrive, t: Long, touch: Boolean = false, connected: Boolean = true,
                      neutral: Boolean = true, active: Boolean = false, fresh: Boolean = true,

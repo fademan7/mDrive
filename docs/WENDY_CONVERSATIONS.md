@@ -1,4 +1,31 @@
-# Wendy English conversation reference — 0.5.3
+# Wendy English conversation reference — 0.5.5
+
+mDrive now connects by Wi-Fi only. USB debugging can still install development
+APKs, but there is no USB controller mode or automatic mode switching.
+
+## Sentence requests and short conversation
+
+Common race topics are recognized before the optional CPU model using normalized
+request phrases and semantic slots (topic, direction, wheel). These do not need
+the exact wording of the older examples. Try:
+
+- "Tell me the time gap." / "Could you tell me the gap ahead please?"
+- "Hey Wendy, please tell me about the gap behind us."
+- "I'd like to know my tyre temperatures."
+- "Could you tell me the left-front tyre pressure?"
+- "Would you recommend a stop now?"
+- "Race update." (position, lap, flag, available ahead/behind gaps)
+- "Say again." (re-query the latest data, not a recording of an old answer)
+- After a wheel query: "What about the rear left?"
+- "Hello." / "How are you?" / "Thanks." / "Let's chat." / "I'm nervous."
+
+Chat uses short English replies, not a general-purpose knowledge chatbot. Race
+values always come from checked telemetry. A bare gap means gap ahead. Asking
+ahead AND behind or multiple unrelated topics in one sentence asks the driver to
+choose one; it does not guess. Read-only follow-up context lasts 30 seconds and
+is cleared on reconnection/session change. Pit plans, approvals and settings are
+never replayed by "say again". Unknown phrasing can still use the existing CPU-only
+classifier. ASR transcription quality itself still depends on the phone service.
 
 Use **Options → Wendy → AUTO: system (recommended)** on this Fold5. Its on-device service exists but an English on-device model was not installed during device verification. AUTO hides PTT; select **Push to talk** to restore it. No wake word is needed. System recognition may use its provider's internet service; on-device mode never silently falls back to cloud. The microphone pauses while Wendy speaks and when the app loses foreground focus.
 
@@ -40,6 +67,17 @@ Freshness is checked per packet group. Missing/stale data is explicitly unavaila
 - **Set brake bias to 54 / Set differential to 55 / Soft tyres next stop / Increase front wing by one** remain unsupported game mutations. UDP provides observations, not a reliable general menu-command channel. They are not falsely acknowledged as completed.
 
 ## Proactive speech
+
+0.5.6: damage queries speak the named components and percentages, including
+tyre/brake damage and blistering; fault bits are not described as percentages.
+They include conservative pit guidance instead of asking the driver to inspect
+a panel. Proactive damage notices escalate as a component worsens and reset when
+repaired. Quiet straight-line running can receive gaps, tyre wear or fuel updates
+after 60 seconds without conversation/alerts, with a three-minute topic cooldown.
+No such filler is queued during corners, braking, pit lane or stale telemetry.
+"OK, box box" is understood but is still a reminder, not a game action.
+Actual game actions and full strategy are explicitly deferred to the
+[final stage](WENDY_FINAL_STAGE.md).
 
 Flags, SC/VSC, significant wear/damage, low fuel, changing weather, pit-related events, penalties, sustained tyre heat, following traffic, lap reports and conservative corner comparisons retain cooldowns. Twenty race greeting variants are selected without consecutive repeats, once per session during the receiver lifetime. Safety alerts take priority. Reconnection/flashback does not repeat a greeting for the same session. Engineer OFF has no optional telemetry/model service.
 

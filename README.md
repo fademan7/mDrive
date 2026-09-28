@@ -2,7 +2,9 @@
 
 Android 휴대전화를 Windows 레이싱 게임용 컨트롤러로 사용하는 프로젝트입니다. 휴대전화를 돌려 조향하고, 화면 왼쪽 브레이크·오른쪽 가속 페달을 조작합니다. **Wendy F1 Engineer**는 F1 UDP 텔레메트리를 읽고 영어 음성 질문에 답하거나 레이스 경고를 알려줍니다.
 
-현재 버전: **0.5.3** · 개발·실기 확인 환경: Windows 11 x64 + Galaxy Z Fold5.
+현재 소스/빌드: **0.5.6 — Wi-Fi 전용** · 개발·실기 확인 환경: Windows 11 x64 + Galaxy Z Fold5.
+
+0.5.6은 짧은 통신 공백 뒤 **새 인증 왕복으로 증명된 입력만 빠르게 복귀**하도록 개선하고, 중력 기준 자동 중앙 정렬과 Wendy의 부위별 데미지·피트 안내/조용한 구간의 상태 브리핑을 추가했습니다. **APK와 Receiver를 함께 업데이트**해야 합니다. 150ms 입력 만료·100ms 인증 기한은 그대로이며 오래된 페달/조향을 유지하지 않습니다. 장시간 실제 F1 dropout의 완전 해결은 아직 확인되지 않았습니다. [0.5.6 검증과 제한](artifacts/validation/CONTROLLER_WENDY_056.md) · [진단 방법](docs/CONTROLLER_DROPOUT.md)
 
 제작: **fademan7 / neojshin** · [홈페이지](https://fademan7.github.io/) · [이메일](mailto:neojshin@gmail.com)
 
@@ -11,7 +13,7 @@ Android 휴대전화를 Windows 레이싱 게임용 컨트롤러로 사용하는
 ## 1. 준비할 것
 
 - **PC:** Windows x64. 가상 Xbox 360 패드용 [ViGEmBus 공식 배포본](https://github.com/nefarius/ViGEmBus/releases/tag/v1.22.0)을 설치합니다. 유지보수가 종료된 드라이버이므로 해당 PC에서 설치·게임 호환성을 확인해야 합니다. 보안·안티치트 기능을 끄지 마세요.
-- **휴대전화:** Android 13(API 33) 이상, 회전 센서. USB 연결에는 데이터 전송 가능한 케이블과 USB 디버깅 승인이 필요합니다.
+- **휴대전화:** Android 13(API 33) 이상, 회전 센서. 게임 입력은 Wi-Fi로만 연결합니다. USB 디버깅은 개발용 APK 설치에만 필요합니다.
 - **빌드 도구:** .NET SDK **10.0.400**(`global.json` 고정), JDK **17**, Android SDK **API 37**, Build Tools **37.0.0**, Platform-Tools(ADB). Gradle **9.5.0**과 Android Gradle Plugin **9.3.2**는 프로젝트에서 고정합니다.
 - **Wendy:** 휴대전화의 영어 음성 인식 서비스, 영어 TTS 음성, 마이크 권한. 시스템 음성 인식은 공급자에 따라 인터넷을 사용할 수 있습니다.
 
@@ -33,7 +35,7 @@ dotnet --version
 powershell -NoProfile -File .\tools\publish-receiver.ps1
 ```
 
-출력: `release\receiver\PhoneWheel.Receiver.exe`. 자체 포함 단일 EXE이므로 빌드된 Receiver를 실행할 PC에는 .NET SDK가 필요하지 않습니다. **ViGEmBus와 USB용 ADB는 EXE에 포함되지 않습니다.** 실행 중인 리시버를 교체할 때는 게임을 멈추고 리시버를 먼저 닫으세요.
+출력: `release\receiver\PhoneWheel.Receiver.exe`. 자체 포함 단일 EXE이므로 빌드된 Receiver를 실행할 PC에는 .NET SDK가 필요하지 않습니다. **ViGEmBus는 EXE에 포함되지 않습니다. 게임 연결에 ADB는 필요 없습니다.** 실행 중인 리시버를 교체할 때는 게임을 멈추고 리시버를 먼저 닫으세요.
 
 ### Android APK
 
@@ -62,30 +64,22 @@ cd ..
 
 리시버는 **한 개만 실행**하세요. 게임을 멈춘 상태에서 연결하고 입력이 정상인지 확인한 후 주행합니다.
 
-### USB — Wi-Fi 없이 연결
-
-1. 휴대전화의 USB 디버깅을 승인하고 잠금을 풉니다. 승인된 USB 휴대전화는 한 대만 연결합니다.
-2. PC에서 `START_USB.cmd`를 더블클릭합니다.
-3. 휴대전화 앱이 자동으로 열리고 연결됩니다. **QR·Wi-Fi·USB 테더링은 필요하지 않습니다.**
-4. 페달에서 손을 떼고 편한 자세로 잠시 고정하면 자동 중앙 보정 후 `Driving active`가 표시됩니다.
-
-ADB는 `ANDROID_HOME\platform-tools`, 기본 Android SDK 설치 위치, PATH 또는 프로젝트 `.tools\android-sdk\platform-tools`에서 찾습니다. ADB가 없는 다른 PC에서는 Platform-Tools도 설치하세요. `START_RECEIVER.cmd`는 승인된 USB 휴대전화가 있으면 USB를 우선 선택하고, 없으면 Wi-Fi로 실행합니다.
+`START_RECEIVER.cmd`, `START_WIFI.cmd` 또는 Receiver EXE를 실행하면 모두 Wi-Fi QR 연결로 시작합니다. USB 자동 감지·ADB reverse·USB TCP 모드는 제거됐습니다. 오래된 `--usb` 옵션과 USB QR은 거절됩니다.
 
 ### Wi-Fi — 같은 로컬 네트워크에서 연결
 
 1. PC와 휴대전화를 같은 로컬 네트워크에 연결합니다. 게스트 Wi-Fi의 기기 간 통신 차단/AP 격리를 피하세요.
-2. `START_WIFI.cmd`를 더블클릭합니다. USB 케이블이 있어도 Wi-Fi 모드로 실행됩니다.
+2. `START_RECEIVER.cmd` 또는 `START_WIFI.cmd`를 더블클릭합니다.
 3. Windows 방화벽에서 Receiver의 **개인 네트워크** 통신을 허용합니다. 방화벽 자체를 끄거나 인터넷 공유기 포트를 개방할 필요는 없습니다.
 4. 폰의 **Options → QR / PC connection → Scan QR**에서 PC 창의 QR을 스캔합니다. 카메라/로컬 네트워크 권한을 요청하면 허용합니다.
 5. 페달에서 손을 떼고 편한 자세로 고정해 `Driving active`를 확인합니다.
 
-PC 리시버를 재시작하면 새 세션이 만들어집니다. **새 QR로 다시 연결**하세요. PC 주소가 바뀌었을 때도 리시버를 다시 실행하고 새 QR을 사용합니다. QR과 연결 키는 공개하지 마세요. USB/Wi-Fi는 실행 시 선택하며 주행 도중 자동 전환하지 않습니다.
+PC 리시버를 재시작하면 새 세션이 만들어집니다. **새 QR로 다시 연결**하세요. PC 주소가 바뀌었을 때도 리시버를 다시 실행하고 새 QR을 사용합니다. QR과 연결 키는 공개하지 마세요. USB 케이블 연결 여부로 통신 모드가 바뀌지 않습니다.
 
 | 용도 | 연결 |
 |---|---|
 | Wi-Fi 컨트롤러 | PC LAN 주소 / UDP **26760** |
-| USB 컨트롤러 | ADB reverse / loopback TCP **26761** |
-| Wendy 음성 명령·응답 | TCP **26762**; USB는 별도 ADB reverse |
+| Wendy 음성 명령·응답 | TCP **26762** |
 | F1 텔레메트리 | PC loopback UDP **20777** |
 
 ## 4. 게임 컨트롤러 설정
@@ -127,7 +121,7 @@ PC 리시버를 재시작하면 새 세션이 만들어집니다. **새 QR로 �
 
 ### 음성 입력과 응답
 
-1. USB/Wi-Fi 컨트롤러 연결을 먼저 완료합니다.
+1. Wi-Fi 컨트롤러 연결을 먼저 완료합니다.
 2. PC에서 **F1 Engineer ON**, 폰에서 **Options → Wendy F1 Engineer → Wendy ON**을 켭니다.
 3. **Push to talk:** PTT를 누른 채 영어로 말하고 놓습니다. 마이크 권한은 처음에 허용합니다.
 4. **AUTO: system (recommended):** PTT와 같은 시스템 영어 인식 서비스를 반복 사용합니다. PTT 버튼은 숨겨지고 웬디가 말할 때는 마이크를 잠시 멈춥니다. 인식 서비스에 따라 인터넷을 사용하며, 완전히 끊김 없는 연속 녹음은 아닙니다.
@@ -140,7 +134,7 @@ Wendy/AUTO는 앱을 다시 실행하면 다시 선택하는 세션 옵션입니
 
 ### 선택 사항: CPU 음성 의도 분류 모델
 
-모델 없이도 정형 문장은 규칙 기반으로 처리하며, 모델이 없거나 실패하면 제한된 Rules fallback을 사용합니다. 더 다양한 표현을 분류하려면 다음을 실행합니다.
+주요 레이싱 질문은 문장 앞의 요청 표현과 핵심 주제·방향·바퀴를 분리해 즉시 처리합니다. 예를 들어 `Tell me the time gap`과 `Could you tell me the gap ahead please`는 앞차 간격으로 인식합니다. 알려진 질문은 모델을 로드하지 않습니다. 애매하게 여러 주제를 함께 묻는 경우 하나씩 질문하도록 안내하며, 나머지 표현은 선택 모델 또는 Rules fallback을 사용합니다. 더 다양한 표현을 분류하려면 다음을 실행합니다.
 
 ```powershell
 powershell -NoProfile -File .\tools\prepare-wendy-model.ps1
@@ -152,9 +146,11 @@ powershell -NoProfile -File .\tools\prepare-wendy-model.ps1
 
 ### 질문 예와 현재 제한
 
-- `Radio check`, `How are my tyres?`, `Tyre temperature`, `What's the gap ahead?`, `What's the gap behind?`
+- `Tell me the time gap`, `Could you tell me the gap behind please`, `Radio check`, `How are my tyres?`, `Tyre temperature`, `What's the gap ahead?`, `What's the gap behind?`
 - `How much fuel do I have?`, `What's my ERS?`, `Any damage?`, `Is it going to rain?`, `What's the gap to the leader?`
 - `What flag is out?`, `What lap am I on?`, `What's my position?`, `Do I need pit in?`, `How was my last lap?`, `Coach me`
+
+`Race update`는 순위·랩·플래그·앞뒤 간격을 짧게 요약합니다. `Say again`은 마지막 정보 질문을 최신 텔레메트리로 다시 조회합니다. 타이어 질문 후 `What about the rear left?`도 가능합니다. 후속 질문 문맥은 30초 또는 세션 변경·재연결 시 초기화되며 설정 명령·승인은 반복 실행하지 않습니다. `Hello`, `How are you`, `Thanks`, `Let’s chat`, `I’m nervous`에는 짧게 응답합니다. 범용 지식 챗봇이나 자유로운 장문 대화 기능은 아닙니다.
 
 플래그·SC/VSC·손상·마모·연료 등 중요 이벤트를 쿨다운과 함께 알립니다. 첫 완전한 유효 랩을 기준으로 수집한 뒤 다음 랩부터 비교 코칭을 할 수 있습니다. 최적 코너 속도나 최적 전략을 보장하는 기능은 아닙니다.
 
@@ -166,7 +162,6 @@ powershell -NoProfile -File .\tools\prepare-wendy-model.ps1
 
 | 증상 | 확인할 내용 |
 |---|---|
-| USB 기기가 없음 | 데이터 케이블, 잠금 해제, USB 디버깅 승인, `adb devices`의 `device`, ADB 설치 경로 |
 | `No Wi-Fi reply` | 같은 LAN, 새 QR, 리시버 실행 여부, 개인 네트워크 방화벽, 게스트/AP 격리·VPN 영향 |
 | 운전은 되지만 Wendy가 안 됨 | PC Engineer ON + 폰 Wendy ON, TCP 26762, 시스템 영어 인식/마이크 권한/미디어 볼륨 |
 | `Telemetry: Waiting` | 게임 세션 진입, UDP 2025 / 127.0.0.1 / 20777, 다른 앱의 포트 점유 |
@@ -188,7 +183,7 @@ cd ..
 python verification/run_verification.py
 ```
 
-최종 0.5.3 기록: Android **43 unit tests**, Windows **28 test groups** 통과. 실기기 Wi-Fi에서 AUTO/PTT 전환·설정·TTS 중 페달 50% 유지와 해제를 null 출력 리시버로 검증했습니다. **실제 게임에 테스트 입력을 보내는 검증이나 장시간 무중단 레이스 인증은 아닙니다.** 100ms 신선도 검사와 150ms 입력 단절 해제 정책은 유지합니다.
+이전 0.5.3 기록: Android **43 unit tests**, Windows **28 test groups** 통과. 실기기 Wi-Fi에서 AUTO/PTT 전환·설정·TTS 중 페달 50% 유지와 해제를 null 출력 리시버로 검증했습니다. **실제 게임에 테스트 입력을 보내는 검증이나 장시간 무중단 레이스 인증은 아닙니다.** 100ms 신선도 검사와 150ms 입력 단절 해제 정책은 유지합니다.
 
 [0.5.3 검증 결과와 제한](artifacts/validation/WENDY_053.md) · [하드웨어 테스트 계획](docs/HARDWARE_TEST_PLAN.md) · [통신 규격](docs/PROTOCOL.md) · [이전 README 기록](README_HISTORY.md)
 

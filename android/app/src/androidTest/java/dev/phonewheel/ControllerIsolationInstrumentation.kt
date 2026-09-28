@@ -17,6 +17,7 @@ class ControllerIsolationInstrumentation : Instrumentation() {
     private lateinit var args: Bundle
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); args = arguments ?: Bundle(); start() }
     override fun onStart() {
+        if (args.getString("soakSeconds") != null) { ControllerSoak.run(this, args); return }
         val result = Bundle()
         var failureDiagnostics: (() -> Unit)? = null
         var releaseTouch: (() -> Unit)? = null
@@ -30,8 +31,8 @@ class ControllerIsolationInstrumentation : Instrumentation() {
             fun call(name: String) = MainActivity::class.java.getDeclaredMethod(name).apply { isAccessible = true }.invoke(activity)
             fun field(name: String): Any? = MainActivity::class.java.getDeclaredField(name).apply { isAccessible = true }.get(activity)
             runOnMainSync {
-                MainActivity::class.java.getDeclaredMethod("connect", String::class.java, String::class.java, String::class.java, Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
-                    .apply { isAccessible = true }.invoke(activity, args.getString("host"), args.getString("session"), args.getString("key"), 26760, false)
+                MainActivity::class.java.getDeclaredMethod("connect", String::class.java, String::class.java, String::class.java, Int::class.javaPrimitiveType)
+                    .apply { isAccessible = true }.invoke(activity, args.getString("host"), args.getString("session"), args.getString("key"), 26760)
             }
             // Cold Android resolver/service startup can exceed the old fixed 2.5s.
             repeat(100) { if (field("client") == null) Thread.sleep(100) }

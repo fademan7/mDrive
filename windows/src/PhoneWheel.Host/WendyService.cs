@@ -138,7 +138,7 @@ internal sealed class WendyService(IPAddress bind, byte[] key, int port = 26762,
                     }
                     catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ProtocolException or JsonException or InvalidOperationException or KeyNotFoundException) { }
                     finally { clientLifetime.Cancel(); if (work != null) try { await work; } catch (OperationCanceledException) { } }
-                    lock (sync) { voice = "IDLE"; voiceAt = double.NegativeInfinity; }
+                    lock (sync) { engineer.ResetConversation(); voice = "IDLE"; voiceAt = double.NegativeInfinity; }
                 }
             }
             finally { owner.Cancel(); await Task.WhenAll(receive, refresh); }

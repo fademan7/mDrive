@@ -57,10 +57,10 @@ PC가 새 페어링을 시작할 때 CSPRNG로 32바이트 키, 0이 아닌 uint
 | 4 | float32 | throttle | 0…1 |
 | 8 | float32 | brake | 0…1 |
 | 12 | uint16 | buttons | XInput 유효 비트만; 초기 주행에서는 0 |
-| 14 | uint16 | flags | 아래 4비트만 사용 |
+| 14 | uint16 | flags | 아래 5비트만 사용 (0.5.6) |
 | 16 | uint32 | calibrationEpoch | 보정·화면 좌표 설정이 바뀔 때 증가 |
 
-flags: bit0 운전 시작 의사(ARM), bit1 센서 유효, bit2 Activity가 foreground, bit3 터치 입력 계층 준비. bit3는 손가락을 대고 있다는 뜻이 아닙니다. 손을 모두 떼어 페달이 0이어도 터치 계층이 정상일 수 있습니다. 나머지 비트는 0이어야 합니다. `buttons & ~0xF3FF`가 0이 아니면 거부합니다.
+flags: bit0 운전 시작 의사(ARM), bit1 센서 유효, bit2 Activity가 foreground, bit3 터치 입력 계층 준비, bit4 FAST_RECOVERY 지원(0.5.6). bit3는 손가락을 대고 있다는 뜻이 아닙니다. 손을 모두 떼어 페달이 0이어도 터치 계층이 정상일 수 있습니다. 나머지 비트는 0이어야 합니다. `buttons & ~0xF3FF`가 0이 아니면 거부합니다. bit4는 READY/ARM을 대체하지 않습니다. 구버전 PC는 bit4를 거부하므로 APK와 Receiver를 함께 업데이트해야 합니다.
 
 송신자는 계산 후 범위를 clamp합니다. 수신자는 범위를 벗어난 값과 NaN/Inf를 정상값으로 바꿔서 쓰지 않고 거부합니다. 잘못된 패킷은 watchdog 갱신 대상이 아닙니다.
 
@@ -71,7 +71,7 @@ flags: bit0 운전 시작 의사(ARM), bit1 센서 유효, bit2 Activity가 fore
 | Payload offset | 형식 | 이름 | 의미 |
 |---:|---|---|---|
 | 0 | uint8 | state | 0 입력 해제, 1 운전 활성 |
-| 1 | uint8 | reason | 0 정상, 1 시간초과, 2 센서, 3 비활성화, 4 보정, 5 사용자 해제, 6 세션, 7 출력 오류, 8 권한 |
+| 1 | uint8 | reason | 0 정상, 1 시간초과, 2 센서, 3 비활성화, 4 보정, 5 사용자 해제, 6 세션, 7 출력 오류, 8 권한, 9 새 입력 복귀 인증 대기 |
 | 2 | uint16 | reserved | 0 |
 
 PC는 20Hz로 보내고 header ACK에 최근 수용한 Control sequence를 넣습니다. 수용한 Control이 없으면 ACK=0이며 폰은 이를 RTT 표본으로 쓰지 않습니다. 출력 오류는 일반 연결 성공과 구분해 표시합니다.
@@ -87,7 +87,9 @@ PC는 20Hz로 보내고 header ACK에 최근 수용한 Control sequence를 넣�
 
 패턴의 구체적 timing/amplitude는 폰의 버전이 있는 프로필에서 결정합니다. 같은 이벤트 갱신은 pattern start를 재설정하지 않고 큐를 누적하지 않습니다. 입력 해제/앱 전환 시 즉시 `cancel()` 합니다. event 8은 25ms ON/25ms OFF 반복을 lease로 제한하고, UI 큐 지연만큼 남은 lease를 줄입니다. PC motor source는 500ms 이내만 유효하고 운전 해제 시 폐기합니다. 구버전은 알 수 없는 event 8을 거부하므로 이 확장은 PC/폰 모두 0.2.0 동시 업데이트가 필요합니다. 기본 비활성이고 TC/ABS 의미를 부여하지 않습니다.
 
-### USB framing (앱 0.2.0)
+### USB framing (앱 0.2.0 — 0.5.5에서 제거됨)
+
+아래 USB framing은 과거 기록입니다. 0.5.5부터 controller는 Wi-Fi UDP만 사용하며, TCP 26761 / ADB reverse / USB QR은 지원하지 않습니다.
 
 승인된 ADB reverse를 통해 PC와 폰의 127.0.0.1:26761 TCP를 연결합니다. 각 PWR1 패킷 앞에는 **2바이트 big-endian 패킷 길이**가 붙고 PWR1 본문은 기존 little-endian 그대로입니다. 길이 48–68만 허용하고 정확한 packet kind별 길이는 codec이 검사합니다. 분할 수신은 ReadExactly로 조립하며 별도 watchdog은 계속 실행합니다. TCP_NODELAY 및 PC 송신 100ms deadline을 적용합니다. Wi-Fi는 기존 UDP 26760입니다. USB 재접속은 새 PC 세션과 명시적 재활성화를 요구합니다.
 
@@ -106,6 +108,10 @@ PC는 20Hz로 보내고 header ACK에 최근 수용한 Control sequence를 넣�
 ## 입력 상태 머신
 
 시작 상태는 입력 해제입니다. `ARM=0`, 유효성 flags=0xE, steer 절댓값 ≤0.05, 두 페달 **정확히 0**, buttons=0인 유효 패킷을 최소 300ms 연속 수신한 다음, 중립인 `ARM=1` 상승 전이를 받아야 활성화합니다. 사이에 150ms 이상의 수신 공백이 있으면 대기를 초기화합니다. ARM=1을 계속 보내는 것만으로 복구되지 않습니다.
+
+0.5.6의 한정된 예외: 이미 활성화된 bit4 지원 연결만, 마지막 유효 입력 +150ms 시점에 **즉시 중립 출력**하고 state=0/reason=9로 전환합니다. 이 만료 시각 이후에 PC가 발급한 challenge를 ACK하는 새 CONTROL이 다음 100ms 안에 도착해야 복귀합니다. 동일 세션/epoch, 최신 sequence, challenge age≤100ms, READY와 ARM이 모두 필요합니다. 복귀 시 그 새 CONTROL만 출력하며 보관된 과거 입력을 재생하지 않습니다. 거절 패킷은 복귀 deadline을 연장하지 않습니다. watchdog이 늦게 실행되어도 deadline은 원래 만료 시각 기준입니다.
+
+100ms 복귀 기한 만료, HELLO 재연결, 센서/포커스/READY 상실, ARM=0, epoch 변경, 출력 오류는 hard disarm으로 전환하여 기존 중립 재활성화를 요구합니다. Android는 유효한 reason=9 동안에만 현재 ARM 의사·보정을 유지하며 로컬 센서/포커스/STATUS 신선도 검사를 계속합니다. bit4 없는 구형 송신자의 상태 전이는 바뀌지 않습니다. 150ms 안전 출력 만료나 100ms 인증 기한을 늘린 기능이 아닙니다. 실제 네트워크 단절 동안의 입력 복원 또는 무중단 보장은 아닙니다.
 
 활성 상태에서도 ARM=0, 센서 무효, 비활성 Activity, 보정 epoch 변경, 출력 오류는 즉시 해제합니다. 150ms 동안 새로운 유효 Control이 없으면 전 축·버튼을 중립으로 만듭니다. watchdog은 패킷 수신 콜백 밖에서 독립적으로 실행해야 합니다. PC UI가 멈춰도 동작하도록 출력 worker에 둡니다.
 

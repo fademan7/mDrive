@@ -8,7 +8,7 @@ public enum HostState : byte { Released = 0, Active = 1 }
 public enum ReleaseReason : byte
 {
     Normal = 0, Timeout = 1, Sensor = 2, Inactive = 3, Calibration = 4,
-    User = 5, Session = 6, OutputError = 7, Permission = 8
+    User = 5, Session = 6, OutputError = 7, Permission = 8, Recovering = 9
 }
 public enum HapticEvent : byte
 {
@@ -29,7 +29,8 @@ public static class Pwr1Codec
     public const int TagSize = 16;
     public const ushort Arm = 0x1;
     public const ushort Ready = 0xE;
-    public const ushort AllFlags = 0xF;
+    public const ushort FastRecovery = 0x10;
+    public const ushort AllFlags = 0x1F;
 
     public static byte[] EncodeHello(HelloFrame frame, ReadOnlySpan<byte> key) => Encode(frame.Header, ReadOnlySpan<byte>.Empty, key);
 

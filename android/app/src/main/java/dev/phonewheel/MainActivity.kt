@@ -50,6 +50,7 @@ class MainActivity : Activity(), SensorEventListener {
     private var wendyInfo: TextView? = null
     private lateinit var estimator: SteeringEstimator
     private lateinit var sensorManager: SensorManager
+    private lateinit var flight: ControllerFlightRecorder
     private lateinit var sensorThread: HandlerThread
     private var rotationSensor: Sensor? = null
     @Volatile private var latestQuaternion: Quaternion? = null
@@ -82,8 +83,9 @@ class MainActivity : Activity(), SensorEventListener {
                 hostActive = latestStatus?.frame?.state == 1
                 if (latestStatus != null && latestStatus !== renderedStatus && now - latestStatus.receivedMs < 200) {
                     renderedStatus = latestStatus
-                    val label = if (connectedDetails?.usb == true) "USB" else "Wi-Fi"
+                    val label = "Wi-Fi"
                     status.text = if (hostActive) "$label · Driving active"
+                        else if (latestStatus.frame.reason == Pwr1.RECOVERING) "$label · recovering fresh input"
                         else "$label · release controls and center to start"
                 }
                 // Sensor worker can publish concurrently: read its timestamp
@@ -92,13 +94,30 @@ class MainActivity : Activity(), SensorEventListener {
                 val fresh = sensorValid && android.os.SystemClock.elapsedRealtimeNanos() - sensorStamp in 0..100_000_000
                 when (autoDrive.tick(now, latestQuaternion, fresh, foreground && hasWindowFocus() && !pedals.editMode,
                     pedals.hasActiveTouch, client != null && lastStatusMs > 0 && now - lastStatusMs < 200,
-                    calibrated && currentControls().isNeutral(), hostActive)) {
+                    calibrated && currentControls().isNeutral(), hostActive,
+                    latestStatus?.frame?.reason == Pwr1.RECOVERING)) {
                     AutoDriveAction.CENTER -> latestQuaternion?.let { q ->
-                        arm = false; steer = 0f; estimator.calibrate(q); calibrated = true; epoch++
-                        status.text = "Centered automatically · release controls to start"; publish()
+                        val rotation = when (display?.rotation) {
+                            android.view.Surface.ROTATION_90 -> 90
+                            android.view.Surface.ROTATION_180 -> 180
+                            android.view.Surface.ROTATION_270 -> 270
+                            else -> 0
+                        }
+                        val center = GravityCenter.reference(q, rotation)
+                        if (center == null) {
+                            autoDrive.request(true)
+                            status.text = "Hold the phone upright to find gravity center"
+                        } else {
+                            arm = false; estimator.calibrate(center)
+                            steer = estimator.update(q, sensorStamp); calibrated = true; epoch++
+                            status.text = "Gravity centered · level wheel and release controls to start"; publish()
+                        }
                     }
-                    AutoDriveAction.ARM -> { arm = true; status.text = "Starting · waiting for receiver"; publish() }
+                    AutoDriveAction.ARM -> { arm = true; flight.record(FlightEntry(FlightEvent.ARM, arm = 1)); status.text = "Starting · waiting for receiver"; publish() }
                     AutoDriveAction.RELEASE -> {
+                        flight.record(FlightEntry(FlightEvent.RELEASE, reason = latestStatus?.frame?.reason ?: -1,
+                            sensorAgeMs = (android.os.SystemClock.elapsedRealtimeNanos() - sensorStamp) / 1_000_000,
+                            arm = 0, hostArmed = if (hostActive) 1 else 0, focused = if (hasWindowFocus()) 1 else 0), arm)
                         lastControlRelease = "Auto release: sensorFresh=$fresh, focused=${hasWindowFocus()}, ACK age=${now - lastStatusMs} ms, PC reason=${latestStatus?.frame?.reason}"
                         android.util.Log.w("PhoneWheel", lastControlRelease)
                         arm = false; haptics.cancel(); status.text = "Controls released · let go and center"; publish()
@@ -115,7 +134,7 @@ class MainActivity : Activity(), SensorEventListener {
         override fun run() {
             if (client != null && android.os.SystemClock.elapsedRealtime() - lastStatusMs > 2000) {
                 if (arm) disarmOutput("No PC reply · controls released")
-                status.text = if (connectedDetails?.usb == true) "Waiting for USB reconnection" else "No Wi-Fi reply · check PC/network"
+                status.text = "No Wi-Fi reply · check PC/network"
             }
             connectionHandler.postDelayed(this, 1000)
         }
@@ -131,6 +150,7 @@ class MainActivity : Activity(), SensorEventListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        flight = ControllerFlightRecorder(java.io.File(getExternalFilesDir(null) ?: filesDir, "controller-diagnostics")) { android.os.SystemClock.elapsedRealtime() }
         requestWindowFeature(Window.FEATURE_NO_TITLE)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.attributes = window.attributes.apply {
@@ -146,22 +166,6 @@ class MainActivity : Activity(), SensorEventListener {
         connectionHandler.postDelayed(connectionHealth, 5000)
         connectionHandler.post(automaticPreparation)
         requestLocalNetworkPermission()
-        consumeUsbIntent(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        consumeUsbIntent(intent)
-    }
-
-    private fun consumeUsbIntent(incoming: Intent?) {
-        val payload = incoming?.getStringExtra("phonewheel_usb") ?: return
-        incoming.removeExtra("phonewheel_usb")
-        try {
-            val details = PairingDetails.parse(payload); require(details.usb)
-            calibrated = false; estimator.clear()
-            connect(details.host, details.session.toString(16), details.keyBase64, details.port, true)
-        } catch (_: Exception) { status.text = "Invalid USB pairing · restart receiver" }
     }
 
     private fun buildUi() {
@@ -269,7 +273,7 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun showOptions() {
-        val fields = inlineFields("mDrive 0.5.3 · Options")
+        val fields = inlineFields("mDrive 0.5.5 · Options")
         arrayOf("QR / PC connection", "Steering / pedals", "Edit control layout", "Test phone vibration",
             if (haptics.gameRumbleEnabled) "Game vibration: ON" else "Game vibration: OFF", "Wendy F1 Engineer", "About / Creator", "Controller diagnostics").forEachIndexed { which, label ->
             fields.addView(Button(this).apply { text = label; isAllCaps = false; setOnClickListener {
@@ -309,6 +313,10 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun showControllerDiagnostics() {
         val fields = inlineFields("Controller diagnostics · snapshot")
+        fields.addView(TextView(this).apply {
+            text = "Flight recorder: ${flight.lastFile ?: "armed (RAM only)"}\nDropped records: ${flight.dropped.get()} · Save errors: ${flight.saveFailures.get()}\nFiles: Android/data/dev.phonewheel/files/controller-diagnostics\n10s before / 3s after incident; no audio or pairing data."
+            setTextColor(Color.WHITE); textSize = 12f
+        })
         val now = android.os.SystemClock.elapsedRealtime()
         val ack = receivedStatus.get()
         fields.addView(TextView(this).apply {
@@ -386,7 +394,7 @@ class MainActivity : Activity(), SensorEventListener {
             try {
                 val details = PairingDetails.parse(contents)
                 connectionHost = details.host; connectionSession = details.session.toString(16); connectionKey = details.keyBase64
-                connect(details.host, connectionSession, details.keyBase64, details.port, details.usb)
+                connect(details.host, connectionSession, details.keyBase64, details.port)
             } catch (_: Exception) { status.text = "Not a PhoneWheel pairing QR" }
         } else super.onActivityResult(requestCode, resultCode, data)
     }
@@ -438,12 +446,12 @@ class MainActivity : Activity(), SensorEventListener {
         autoDrive.request(false); publish()
     }
 
-    private fun connect(host: String, sessionHex: String, keyBase64: String, port: Int = 26760, usb: Boolean = false) {
+    private fun connect(host: String, sessionHex: String, keyBase64: String, port: Int = 26760) {
         releaseInputs("Connecting to PC…")
         try {
             val decoded = Base64.getDecoder().decode(keyBase64); require(decoded.size == 32)
             val session = sessionHex.toULong(16); require(session != 0uL)
-            val details = PairingDetails(host, port, session, keyBase64, usb)
+            val details = PairingDetails(host, port, session, keyBase64)
             if (details == connectedDetails && client != null) { autoDrive.request(!calibrated); status.text = "Checking existing PC connection…"; return }
             val generation = ++connectionGeneration
             receivedStatus.set(null); renderedStatus = null
@@ -469,25 +477,25 @@ class MainActivity : Activity(), SensorEventListener {
                                     else if (remaining > 0) haptics.offer(frame.copy(leaseMs = remaining.toInt()))
                                 }
                             }
-                        }, usb, {
+                        }, {
                             val lostAt = android.os.SystemClock.elapsedRealtime()
                             runOnUiThread {
                             if (generation == connectionGeneration && !isDestroyed) {
                                 // A delayed UI callback must not erase a newer recovered ACK.
                                 val observed = receivedStatus.get()
                                 if ((observed == null || observed.receivedMs <= lostAt) && receivedStatus.compareAndSet(observed, null))
-                                    disarmOutput(if (usb) "USB lost · reconnecting" else "Wi-Fi reply lost · checking connection")
+                                    disarmOutput("Wi-Fi reply lost · checking connection")
                             }
-                        } })
+                        } }, flight = flight)
                     android.util.Log.i("PhoneWheel", "Controller transport created")
                     runOnUiThread {
                         if (generation != connectionGeneration || isDestroyed) pending.close()
                         else {
                             client = pending; connectedDetails = details; wendy.connection(details)
-                            wifiLease.update(!details.usb, foreground)
+                            wifiLease.update(true, foreground)
                             calibrated = false; estimator.clear(); hostActive = false
                             autoDrive.request(true)
-                            status.text = if (usb) "Connecting USB · waiting for PC…" else "QR accepted · waiting for PC…"; publish()
+                            status.text = "QR accepted · waiting for PC…"; publish()
                         }
                     }
                 } catch (e: Exception) { runOnUiThread {
@@ -506,7 +514,8 @@ class MainActivity : Activity(), SensorEventListener {
 
     override fun onResume() {
         super.onResume(); foreground = true
-        if (::wifiLease.isInitialized) wifiLease.update(connectedDetails?.usb == false, true)
+        flight.record(FlightEntry(FlightEvent.RESUME))
+        if (::wifiLease.isInitialized) wifiLease.update(connectedDetails != null, true)
         if (::wendy.isInitialized) wendy.foreground(true)
         sensorThread = HandlerThread("phonewheel-sensor", Process.THREAD_PRIORITY_MORE_FAVORABLE).apply { start() }
         rotationSensor?.let { sensorManager.registerListener(this, it, 5_000, 0, Handler(sensorThread.looper)) }
@@ -515,18 +524,20 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     override fun onPause() {
+        flight.record(FlightEntry(FlightEvent.PAUSE, arm = if (arm) 1 else 0), arm)
         if (::wifiLease.isInitialized) wifiLease.close()
         if (::wendy.isInitialized) wendy.foreground(false)
         calibrated = false; estimator.clear()
-        releaseInputs("Controls released"); foreground = false; sensorManager.unregisterListener(this)
+        releaseInputs("Controls released", 3); foreground = false; sensorManager.unregisterListener(this)
         if (::sensorThread.isInitialized) sensorThread.quitSafely(); publish(); super.onPause()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        if (::flight.isInitialized) flight.record(FlightEntry(FlightEvent.FOCUS, focused = if (hasFocus) 1 else 0, arm = if (arm) 1 else 0), !hasFocus && arm)
         android.util.Log.i("PhoneWheel", "Window focus=$hasFocus foreground=$foreground")
         if (!::pedals.isInitialized) return
-        if (!hasFocus) { releaseInputs("Paused"); if (::wendy.isInitialized) wendy.foreground(false) }
+        if (!hasFocus) { releaseInputs("Paused", 3); if (::wendy.isInitialized) wendy.foreground(false) }
         else {
             window.decorView.windowInsetsController?.apply {
                 hide(WindowInsets.Type.systemBars())
@@ -541,30 +552,39 @@ class MainActivity : Activity(), SensorEventListener {
         if (::wifiLease.isInitialized) wifiLease.close()
         if (::wendy.isInitialized) wendy.close()
         connectionGeneration++; connectionHandler.removeCallbacksAndMessages(null)
-        releaseInputs("Controls released"); client?.close(); haptics.cancel(); super.onDestroy()
+        releaseInputs("Controls released"); client?.close(); haptics.cancel(); flight.close(); super.onDestroy()
     }
 
     override fun onSensorChanged(event: SensorEvent) {
+        val now = android.os.SystemClock.elapsedRealtimeNanos()
+        val rejected = SensorTimestampGate.rejection(event.timestamp, sensorTimestampNs, now)
+        if (rejected != 0) {
+            flight.record(FlightEntry(FlightEvent.SENSOR_REJECT, accepted = 0, reason = rejected, sensorAgeMs = (now - event.timestamp) / 1_000_000))
+            return // Never reset estimator or refresh freshness using a rejected sample.
+        }
         val q = FloatArray(4); SensorManager.getQuaternionFromVector(q, event.values)
         latestQuaternion = Quaternion(q[0].toDouble(), q[1].toDouble(), q[2].toDouble(), q[3].toDouble())
-        sensorTimestampNs = event.timestamp
         if (calibrated) try { steer = estimator.update(latestQuaternion!!, event.timestamp); sensorValid = true }
         catch (_: Exception) {
+            flight.record(FlightEntry(FlightEvent.SENSOR_FAILURE, reason = 1, sensorAgeMs = (now - event.timestamp) / 1_000_000, arm = if (arm) 1 else 0), arm)
             steer = 0f; sensorValid = false; calibrated = false; arm = false; estimator.clear()
-            runOnUiThread { disarmOutput("Rotation tracking stopped · center required") }
+            runOnUiThread { disarmOutput("Rotation tracking stopped · center required", 2) }
         }
         else { steer = 0f; sensorValid = event.accuracy != SensorManager.SENSOR_STATUS_UNRELIABLE }
-        if (::pedals.isInitialized) pedals.setSteering(steer, -estimator.angleDegrees)
+        sensorTimestampNs = event.timestamp // Publish timestamp only after computing this sample.
+        flight.record(FlightEntry(FlightEvent.SENSOR, accepted = 1, sensorAgeMs = (now - event.timestamp) / 1_000_000, arm = if (arm) 1 else 0))
         publish()
+        if (::pedals.isInitialized) pedals.setSteering(steer, -estimator.angleDegrees)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) { sensorValid = accuracy != SensorManager.SENSOR_STATUS_UNRELIABLE }
 
     private fun currentControls() = Controls(steer, throttle, brake, buttons,
         if (::pedals.isInitialized) pedals.lookX else 0f, if (::pedals.isInitialized) pedals.lookY else 0f)
-    private fun publish() = client?.update(ControllerSnapshot(currentControls(), sensorValid, foreground, true, arm, epoch, sensorTimestampNs))
+    @Synchronized private fun publish() = client?.update(ControllerSnapshot(currentControls(), sensorValid, foreground, true, arm, epoch, sensorTimestampNs))
 
-    private fun releaseInputs(message: String) {
+    private fun releaseInputs(message: String, reason: Int = 5) {
+        if (::flight.isInitialized) flight.record(FlightEntry(FlightEvent.RELEASE, reason = reason, arm = 0), arm)
         lastControlRelease = message
         autoDrive.stop(); hostActive = false
         arm = false; steer = 0f; brake = 0f; throttle = 0f; buttons = 0.toUShort()
@@ -572,7 +592,8 @@ class MainActivity : Activity(), SensorEventListener {
         if (::haptics.isInitialized) haptics.cancel(); if (::status.isInitialized) status.text = message; publish()
     }
 
-    private fun disarmOutput(message: String) {
+    private fun disarmOutput(message: String, reason: Int = 1) {
+        flight.record(FlightEntry(FlightEvent.RELEASE, reason = reason, arm = 0), arm)
         lastControlRelease = message
         // Network/sensor safety must stop game output, not invalidate a held
         // pointer once a second. Re-arm only after untouched neutral dwell.

@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 namespace PhoneWheel.Core;
 
 public enum DriverIntent { UNKNOWN, GET_GAP_AHEAD, GET_GAP_BEHIND, GET_TYRE_STATUS, GET_FUEL, GET_ERS, GET_DAMAGE, GET_POSITION, GET_LAP, GET_WEATHER, GET_FLAGS, GET_PENALTIES, GET_PIT_STATUS, GET_BRAKE_BIAS, GET_DIFFERENTIAL, DRIVER_FEEDBACK, CONFIRM, REJECT, CHANGE_SETTING, GET_PIT_ADVICE, PLAN_PIT, CANCEL_PIT, GET_LAP_REPORT, GET_COACHING, GET_TYRE_TEMPERATURE, GET_TYRE_PRESSURE, GET_TYRE_AGE, GET_BRAKE_TEMPERATURE, GET_ENGINE_TEMPERATURE, GET_LAPS_REMAINING,
-    RADIO_CHECK, GET_HELP, GET_SPEED, GET_GEAR, GET_RPM, GET_DRS, GET_TYRE_COMPOUND, GET_TRACK_TEMPERATURE, GET_AIR_TEMPERATURE, GET_SESSION_TIME, GET_PIT_LIMITER, GET_PIT_STOPS, GET_WING_SETUP, GET_LAP_VALIDITY, GET_LAST_LAP_TIME, GET_SECTOR, GET_ERS_MODE, GET_WEATHER_FORECAST, GET_GAP_LEADER }
+    RADIO_CHECK, GET_HELP, GET_SPEED, GET_GEAR, GET_RPM, GET_DRS, GET_TYRE_COMPOUND, GET_TRACK_TEMPERATURE, GET_AIR_TEMPERATURE, GET_SESSION_TIME, GET_PIT_LIMITER, GET_PIT_STOPS, GET_WING_SETUP, GET_LAP_VALIDITY, GET_LAST_LAP_TIME, GET_SECTOR, GET_ERS_MODE, GET_WEATHER_FORECAST, GET_GAP_LEADER,
+    SMALL_TALK, GET_RACE_SUMMARY, REPEAT_QUERY, FOLLOW_UP_WHEEL }
 public enum DriverSymptom { NONE, UNDERSTEER, OVERSTEER, REAR_INSTABILITY, POOR_TRACTION, WHEELSPIN, FRONT_LOCKING, REAR_BRAKING_INSTABILITY, HIGH_SPEED_INSTABILITY, KERB_INSTABILITY, TYRE_OVERHEATING, UNEVEN_WEAR, EXCESSIVE_DEGRADATION, AERO_BALANCE, BOTTOMING, WEAK_ROTATION, STRAIGHT_LINE_SPEED }
 public enum CornerPhase { UNKNOWN, CORNER_ENTRY, MID_CORNER, CORNER_EXIT, STRAIGHT }
 public enum DrivingCondition { UNKNOWN, ON_THROTTLE, ON_BRAKE, COASTING, OVER_KERB, HIGH_SPEED }
@@ -49,17 +50,20 @@ public static class WendyLanguage
 {
     public static DriverWheel ExplicitWheel(string text) {
         var q = Normalize(text);
-        return q.Contains("front left") ? DriverWheel.FRONT_LEFT : q.Contains("front right") ? DriverWheel.FRONT_RIGHT : q.Contains("rear left") ? DriverWheel.REAR_LEFT : q.Contains("rear right") ? DriverWheel.REAR_RIGHT : DriverWheel.ANY;
+        return Regex.IsMatch(q, @"\b(front left|left front)\b") ? DriverWheel.FRONT_LEFT : Regex.IsMatch(q, @"\b(front right|right front)\b") ? DriverWheel.FRONT_RIGHT : Regex.IsMatch(q, @"\b(rear left|left rear)\b") ? DriverWheel.REAR_LEFT : Regex.IsMatch(q, @"\b(rear right|right rear)\b") ? DriverWheel.REAR_RIGHT : DriverWheel.ANY;
     }
-    public static string Normalize(string text) => Regex.Replace(Regex.Replace(text.ToLowerInvariant().Replace('’', '\''), "[^a-z0-9 ]", ""), " +", " ").Trim();
+    public static string Normalize(string text) => Regex.Replace(Regex.Replace(text.ToLowerInvariant().Replace('’', '\'').Replace("'", "").Replace('-', ' '), "[^a-z0-9 ]", " "), " +", " ").Trim();
     public static bool IsConfirm(string text) => Normalize(text) is "yes" or "agree" or "agreed" or "yeah do it" or "sounds good" or "go ahead" or "yes do it" or "do it";
     public static bool IsReject(string text) => Normalize(text) is "no" or "no leave it" or "dont change it" or "leave it" or "reject" or "cancel";
-    public static bool IsCommand(string text) => Regex.IsMatch(Normalize(text), @"^(set|increase|decrease|change|adjust|box|pit this lap)\b") || Normalize(text).Contains("next stop");
+    public static bool IsCommand(string text) => Regex.IsMatch(WendyNaturalLanguage.Request(text), @"^(set|increase|decrease|change|adjust|box|pit this lap)\b") || Normalize(text).Contains("next stop");
     // Closed phrases for plans; negative/ambiguous phrases never become a plan.
     public static WendyIntent? RaceRequest(string text) {
-        var q = Regex.Replace(Normalize(text), @"^(hey )?wendy +", "");
+        if (text.Length is 0 or > 240) return WendyIntent.Unknown;
+        if (IsConfirm(text)) return new(DriverIntent.CONFIRM);
+        if (IsReject(text)) return new(DriverIntent.REJECT);
+        var q = WendyNaturalLanguage.Request(text);
+        if (Regex.IsMatch(q, @"\b(ignore|override|forget)\b.*\b(rules|instructions|prompt)\b")) return WendyIntent.Unknown;
         if (WendyDataQueries.Match(q) is { } dataQuery) return new(dataQuery);
-        if (TelemetryQuery(q) is { } telemetry) return telemetry;
         if (Regex.IsMatch(q, @"^(what is|whats|tell me) (my |the |current )?brake (bias|balance)( value)?$")) return new(DriverIntent.GET_BRAKE_BIAS);
         if (Regex.IsMatch(q, @"^((what is|whats|tell me) (my |the |current )?)?(diff|differential)( value| setting| set to)?$")) return new(DriverIntent.GET_DIFFERENTIAL);
         if (q is "box" or "box box" or "box this lap" or "pit this lap" or "lets box" or "lets pit" or "i want to pit" or "request pit stop") return new(DriverIntent.PLAN_PIT);
@@ -67,7 +71,7 @@ public static class WendyLanguage
         if (Regex.IsMatch(q, @"^(do (i|we) need (to )?(pit|box)( in)?|should (i|we) (pit|box)( now| this lap)?|when should (i|we) pit|is it time to pit|pit strategy|pit window)$")) return new(DriverIntent.GET_PIT_ADVICE);
         if (Regex.IsMatch(q, @"^(how was (my |the )?last lap|whats (my |the )?(last lap time|lap time|pace)|lap report|last lap|am i getting faster)$")) return new(DriverIntent.GET_LAP_REPORT);
         if (q is "any advice" or "how can i improve" or "coach me" or "coaching status" or "how was that corner") return new(DriverIntent.GET_COACHING);
-        return null;
+        return WendyNaturalLanguage.Match(text) ?? TelemetryQuery(q);
     }
     private static WendyIntent? TelemetryQuery(string q) {
         if (IsCommand(q)) return null;

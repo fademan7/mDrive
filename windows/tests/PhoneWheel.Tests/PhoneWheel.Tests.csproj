@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PhoneWheel.Core\PhoneWheel.Core.csproj" />
     <Compile Include="..\..\src\PhoneWheel.Host\WendyService.cs" Link="WendyService.cs" />
+    <Compile Include="..\..\src\PhoneWheel.Host\ReceiverTransport.cs" Link="ReceiverTransport.cs" />
     <Compile Include="..\..\src\PhoneWheel.Host\CpuIntentModel.cs" Link="CpuIntentModel.cs" />
     <Compile Include="..\..\src\PhoneWheel.Host\CpuProcessJob.cs" Link="CpuProcessJob.cs" />
     <Compile Include="..\..\src\PhoneWheel.Host\WendyRecommendationStore.cs" Link="WendyRecommendationStore.cs" />

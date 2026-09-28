@@ -14,10 +14,10 @@ internal static class WendyNextTests
         Check(WendyIntent.Parse(valid.Replace("NONE", "UNDERSTEER")).Intent == DriverIntent.UNKNOWN, "query cannot carry feedback");
         Check(WendyLanguage.Fallback("How far is the guy in front?").Intent == DriverIntent.GET_GAP_AHEAD, "gap fallback");
         Check(WendyLanguage.Fallback("fuel and tyre wear").Intent == DriverIntent.UNKNOWN, "ambiguous not tyres");
-        Check(WendyLanguage.Fallback("hello there").Intent == DriverIntent.UNKNOWN, "unknown");
+        Check(WendyLanguage.Fallback("hello there").Intent == DriverIntent.SMALL_TALK, "short greeting");
         Check(!WendyLanguage.IsConfirm("Don't go ahead"), "negative is not approval");
         var engineer = new WendyEngineer(); var race = new F1RaceState();
-        Check(engineer.Answer("hello there", 1, race, 0).Text == "I didn't understand that.", "unknown response");
+        Check(engineer.Answer("hello there", 1, race, 0).Text.StartsWith("Hi."), "greeting without telemetry");
         Check(engineer.Answer("Go ahead", 1, race, 0).Text.Contains("No change"), "no pending approval");
         Check(engineer.Answer("set brake bias to 54 or 55", 1, race, 0).Kind == "rejected", "ambiguous mutation");
     }

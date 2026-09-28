@@ -77,7 +77,7 @@ internal static class WendyTests
         Feed(0); Check(engineer.Alert(race, 0) == null, "quiet healthy baseline");
         Float(damage, d + 8, 42); Feed(100); Check(engineer.Alert(race, 100)?.Text.Contains("above 40") == true, "wear crossing");
         Feed(9000); Check(engineer.Alert(race, 9000) == null, "wear doesn't repeat after global cooldown");
-        damage[d + 28] = 15; Feed(10000); Check(engineer.Alert(race, 10000)?.Text == "Front wing damage detected.", "damage crossing");
+        damage[d + 28] = 15; Feed(10000); Check(engineer.Alert(race, 10000)?.Text.Contains("Left front wing damage is 15 percent.") == true, "damage crossing");
         Feed(19000); Check(engineer.Alert(race, 19000) == null, "damage doesn't repeat");
         Float(status, s + 5, 2); Feed(20000); Check(engineer.Alert(race, 20000)?.Text.StartsWith("Low fuel") == true, "fuel threshold");
         session[29] = 4; Feed(29000); Check(engineer.Alert(race, 29000)?.Text.Contains("heavy rain") == true, "weather transition");

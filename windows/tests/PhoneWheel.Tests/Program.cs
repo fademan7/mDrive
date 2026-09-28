@@ -16,7 +16,7 @@ static int Main(string[] args)
         ("xinput independent triggers", IndependentTriggers),
         ("sequence wrap", SequenceWrap),
         ("safety dwell timeout and rearm", SafetyTransitions),
-        ("USB reconnect releases and rejects replay", UsbReconnect),
+        ("authenticated reconnect releases and rejects replay", AuthenticatedReconnect),
         ("received preview versus safe output", DiagnosticPreview),
         ("haptic no queue and refresh", HapticTransitions),
         ("game rumble expiry and disarm", RumbleTransitions),
@@ -37,6 +37,17 @@ static int Main(string[] args)
         ,("gamepad output exception recovery and stale mailbox expiry", OutputRecoveryTests.Recovery)
         ,("dedicated controller clocks and failure propagation", OutputRecoveryTests.DedicatedLoops)
         ,("Wendy game weather forecast and same-lap leader gap", Wendy052Tests.ForecastAndLeader)
+        ,("controller jitter, packet loss and isolated stale ACK", DropoutTests.JitterAndRejections)
+        ,("controller loss and held throttle/steering/brake recovery", DropoutTests.LossAndHeldRecovery)
+        ,("controller bounded post-expiry proof recovery and hard-fault isolation", DropoutTests.ProvenFastRecovery)
+        ,("controller distinct READY, ACK and output failure transitions", DropoutTests.DistinctFaults)
+        ,("controller flight recorder bounded RAM and triggered disk", DropoutTests.Recorder)
+        ,("controller UDP independent of saturated shared pool", DropoutTests.ReceiveIsolation)
+        ,("Wendy natural phrases, ambiguity and short conversation", WendyNaturalLanguageTests.Phrases)
+        ,("Wendy fresh follow-up context and race summary", WendyNaturalLanguageTests.Context)
+        ,("Wendy known phrases bypass the CPU model", WendyNaturalLanguageTests.FastPath)
+        ,("Wendy authenticated sentence conversation round trip", WendyServiceTests.Conversation)
+        ,("Wendy spoken damage, pit guidance and quiet interval radio", Wendy056Tests.DamageAndRadio)
     };
     var failures = 0;
     foreach (var test in tests)
@@ -144,7 +155,7 @@ static void SafetyTransitions()
     True(Send(1140, arm: true, epoch: 2)); True(gate.Armed);
 }
 
-static void UsbReconnect()
+static void AuthenticatedReconnect()
 {
     var gate = new SafetyGate(Session, Key); uint seq = 0;
     byte[] Hello(uint n) => Pwr1Codec.EncodeHello(new(new(PacketKind.Hello, Session, n, 1, 0)), Key);

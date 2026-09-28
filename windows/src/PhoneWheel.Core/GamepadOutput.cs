@@ -55,6 +55,9 @@ public sealed class GamepadWorker : IAsyncDisposable
     private long _failures, _writes, _lastSuccess;
     private readonly long _started = Stopwatch.GetTimestamp();
     private string _lastError = "None";
+    private readonly ControllerFlightRecorder? _flight;
+    private double _maxWriteMs;
+    public double MaxWriteMs => Volatile.Read(ref _maxWriteMs);
     public bool Faulted => _faulted;
     public long FailureCount => Interlocked.Read(ref _failures);
     public long WriteCount => Interlocked.Read(ref _writes);
@@ -62,9 +65,10 @@ public sealed class GamepadWorker : IAsyncDisposable
     public double LastWriteAgeMs => Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastSuccess) is var stamp && stamp != 0 ? stamp : _started).TotalMilliseconds;
     public event Action<Exception>? OutputError;
 
-    public GamepadWorker(IGamepadOutput output)
+    public GamepadWorker(IGamepadOutput output, ControllerFlightRecorder? flight = null)
     {
         _output = output;
+        _flight = flight;
         // The critical native gamepad call must not share .NET thread-pool
         // continuations with UI, speech/model work or telemetry processing.
         _thread = new Thread(Run) { IsBackground = true, Name = "mDrive gamepad output", Priority = ThreadPriority.AboveNormal };
@@ -93,8 +97,12 @@ public sealed class GamepadWorker : IAsyncDisposable
                 // Independent freshness guard even if the producer/watchdog
                 // stalls. Never replay buffered throttle when output recovers.
                 var controls = _faulted || lastPublished == 0 || Stopwatch.GetElapsedTime(lastPublished).TotalMilliseconds >= 150 ? Controls.Neutral : last;
+                var writeStarted = Stopwatch.GetTimestamp();
                 try {
                     _output.Write(controls);
+                    var writeMs = Stopwatch.GetElapsedTime(writeStarted).TotalMilliseconds;
+                    Volatile.Write(ref _maxWriteMs, Math.Max(_maxWriteMs, writeMs));
+                    _flight?.Record(new(ControlEvent.Output, WriteMs: writeMs, NonNeutral: !controls.IsNeutral, ErrorCount: FailureCount));
                     Interlocked.Increment(ref _writes);
                     Interlocked.Exchange(ref _lastSuccess, Stopwatch.GetTimestamp());
                     if (_faulted) {
@@ -105,6 +113,7 @@ public sealed class GamepadWorker : IAsyncDisposable
                 }
                 catch (Exception ex) {
                     Interlocked.Increment(ref _failures);
+                    _flight?.Record(new(ControlEvent.OutputError, WriteMs: Stopwatch.GetElapsedTime(writeStarted).TotalMilliseconds, ErrorCount: FailureCount, ErrorCode: ex.HResult), true);
                     Volatile.Write(ref _lastError, ex.GetType().Name);
                     var first = !_faulted;
                     _faulted = true; last = Controls.Neutral; lastPublished = 0;

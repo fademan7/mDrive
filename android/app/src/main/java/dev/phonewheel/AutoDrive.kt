@@ -21,7 +21,7 @@ class AutoDrive {
     fun stop() { stage = Stage.STOPPED; since = null; anchor = null; lastTick = null }
 
     fun tick(nowMs: Long, pose: Quaternion?, sensorFresh: Boolean, focused: Boolean,
-             touching: Boolean, connected: Boolean, neutral: Boolean, hostActive: Boolean): AutoDriveAction {
+             touching: Boolean, connected: Boolean, neutral: Boolean, hostActive: Boolean, hostRecovering: Boolean = false): AutoDriveAction {
         if (!enabled) return AutoDriveAction.NONE
         val gap = lastTick?.let { nowMs - it }
         lastTick = nowMs
@@ -35,7 +35,7 @@ class AutoDrive {
             return AutoDriveAction.NONE
         }
         if (stage == Stage.ACTIVE) {
-            if (!connected || !hostActive) { request(false); return AutoDriveAction.RELEASE }
+            if (!connected || (!hostActive && !hostRecovering)) { request(false); return AutoDriveAction.RELEASE }
             return AutoDriveAction.NONE
         }
         if (stage == Stage.REQUESTED) {

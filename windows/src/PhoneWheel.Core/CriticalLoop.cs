@@ -6,6 +6,12 @@ namespace PhoneWheel.Core;
 // pool used by voice/telemetry. No catch-up burst after an OS scheduling delay.
 public static class CriticalLoop
 {
+    public static Task Run(string name, Action body) {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        new Thread(() => { try { body(); done.TrySetResult(); } catch (Exception ex) { done.TrySetException(ex); } })
+            { IsBackground = true, Name = name, Priority = ThreadPriority.AboveNormal }.Start();
+        return done.Task;
+    }
     public static Task Start(string name, int intervalMs, CancellationToken token, Action tick) {
         if (intervalMs <= 0) throw new ArgumentOutOfRangeException(nameof(intervalMs));
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

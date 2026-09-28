@@ -49,6 +49,7 @@ public sealed class F1RaceState
     public uint Sector1Ms { get; private set; }
     public uint Sector2Ms { get; private set; }
     public byte[] ComponentDamage { get; private set; } = new byte[18]; // payload offsets 28..45
+    public byte[] WheelDamage { get; private set; } = new byte[12]; // tyre/brake/blister, RL RR FL FR
     public double RaceStartMs { get; private set; } = double.NegativeInfinity;
     public float Throttle { get; private set; }
     public float Brake { get; private set; }
@@ -199,6 +200,7 @@ public sealed class F1RaceState
                 for (var i = 0; i < 4; i++) Wear[i] = F(d, i * 4);
                 FrontWing = Math.Max(d[28], d[29]);
                 ComponentDamage = d.Slice(28, 18).ToArray();
+                WheelDamage = d.Slice(16, 12).ToArray();
                 OtherDamage = 0;
                 for (var i = 16; i < 24; i++) OtherDamage = Math.Max(OtherDamage, d[i]);
                 for (var i = 30; i < 34; i++) OtherDamage = Math.Max(OtherDamage, d[i]);

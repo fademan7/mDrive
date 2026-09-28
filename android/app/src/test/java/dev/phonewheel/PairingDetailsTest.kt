@@ -6,10 +6,9 @@ import org.junit.Test
 class PairingDetailsTest {
     private val fixture = "phonewheel://pair?v=1&host=192.168.1.25&port=26760&session=0102030405060708&key=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
 
-    @Test fun usbPairingIsLoopbackOnly() {
+    @Test fun retiredUsbPairingIsRejected() {
         val usb = fixture.replace("://pair?", "://usb?").replace("192.168.1.25", "127.0.0.1")
-        assertTrue(PairingDetails.parse(usb).usb)
-        assertFalse(PairingDetails.parse(fixture).usb)
+        assertThrows(IllegalArgumentException::class.java) { PairingDetails.parse(usb) }
         assertThrows(IllegalArgumentException::class.java) { PairingDetails.parse(usb.replace("127.0.0.1", "192.168.1.25")) }
     }
 

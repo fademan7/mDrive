@@ -29,7 +29,7 @@ def decode_status(data, session, key):
     if (magic, version, kind, length, actual_session) != (b"PWR1", 1, 3, 4, session):
         raise ValueError("bad status header")
     state, reason, reserved = struct.unpack_from("<BBH", body, 32)
-    if reserved or state not in (0, 1) or reason > 8:
+    if reserved or state not in (0, 1) or reason > 9:
         raise ValueError("bad status payload")
     return sequence, ack, state, reason
 

@@ -13,12 +13,12 @@ data class ControllerSnapshot(val controls: Controls = Controls(), val sensorVal
 class UdpControllerClient(
     host: String, private val port: Int, private val session: ULong, private val key: ByteArray,
     private val onStatus: (StatusFrame) -> Unit, private val onHaptic: (HapticFrame) -> Unit,
-    private val usb: Boolean = false,
     private val onDisconnected: () -> Unit = {},
-    private val nowNanos: () -> Long = { SystemClock.elapsedRealtimeNanos() }
+    private val nowNanos: () -> Long = { SystemClock.elapsedRealtimeNanos() },
+    private val flight: ControllerFlightRecorder? = null
 ) : AutoCloseable {
     private val address = InetAddress.getByName(host)
-    private fun newTransport(): PacketTransport = if (usb) UsbPacketTransport(port) else WifiPacketTransport(address, port)
+    private fun newTransport(): PacketTransport = WifiPacketTransport(address, port)
     private val socket = AtomicReference<PacketTransport?>(newTransport())
     private val executor = Executors.newScheduledThreadPool(2) { task ->
         Thread({
@@ -40,6 +40,8 @@ class UdpControllerClient(
     @Volatile var receivedStatuses = 0L; private set
     @Volatile var maxStatusGapMs = 0L; private set
     private var previousSendNs = 0L
+    private var previousReady = false
+    private var hostWasActive = false
 
     init {
         executor.execute(::receiveLoop)
@@ -50,7 +52,7 @@ class UdpControllerClient(
         // Scheduled executors suppress every future run after an uncaught exception.
         // Never let an optional callback/invalid snapshot silently kill the sender.
         try { sendLatest() }
-        catch (_: Exception) { sendFailures++ }
+        catch (_: Exception) { sendFailures++; flight?.record(FlightEntry(FlightEvent.SENDER_ERROR), true) }
     }
 
     private fun sendLatest() {
@@ -61,10 +63,12 @@ class UdpControllerClient(
         // clearing READY for one packet and disarming the PC during normal input.
         val s = snapshot.get()
         val nowNs = nowNanos()
+        val gapMs = if (previousSendNs == 0L) 0 else (nowNs - previousSendNs) / 1_000_000
         if (previousSendNs != 0L) maxSendGapMs = maxOf(maxSendGapMs, (nowNs - previousSendNs) / 1_000_000)
         previousSendNs = nowNs
-        if (!usb && helloAccepted && nowNs - lastPeerNs > 1_000_000_000) {
+        if (helloAccepted && nowNs - lastPeerNs > 1_000_000_000) {
             helloAccepted = false; lastHelloNs = Long.MIN_VALUE
+            flight?.record(FlightEntry(FlightEvent.RECONNECT, reason = 1), s.arm)
             onDisconnected()
         }
         val paired = helloAccepted
@@ -77,17 +81,22 @@ class UdpControllerClient(
         val header = Header(if (paired) controlKind else PacketKind.HELLO, session, sequence, (nowNs / 1000).toULong(), peerSequence)
         val bytes = if (!paired) Pwr1.encodeHello(header, key) else {
             val sensorFresh = s.sensorValid && nowNs - s.sensorTimestampNs in 0..100_000_000
-            val flags = (if (s.arm) Pwr1.ARM else 0) or (if (sensorFresh) 2 else 0) or (if (s.foreground) 4 else 0) or (if (s.touchReady) 8 else 0)
+            val flags = Pwr1.FAST_RECOVERY or (if (s.arm) Pwr1.ARM else 0) or (if (sensorFresh) 2 else 0) or (if (s.foreground) 4 else 0) or (if (s.touchReady) 8 else 0)
             val safeControls = if (sensorFresh && s.foreground && s.touchReady) s.controls else Controls()
             synchronized(history) {
                 history[sequence] = nowNs; while (history.size > 512) history.remove(history.keys.first())
-                history.entries.removeIf { nowNs - it.value > 100_000_000 }
+                history.entries.removeIf { nowNs - it.value > 10_000_000_000 }
             }
+            val ready = flags and Pwr1.READY == Pwr1.READY
+            flight?.record(FlightEntry(FlightEvent.SEND, sequence = sequence.toLong(), ack = header.ack.toLong(),
+                sendGapMs = gapMs, sensorAgeMs = (nowNs - s.sensorTimestampNs) / 1_000_000, flags = flags,
+                arm = if (s.arm) 1 else 0, nonNeutral = if (s.controls.isNeutral()) 0 else 1), previousReady && !ready && s.arm)
+            previousReady = ready
             Pwr1.encodeControl(ControlFrame(header, safeControls, flags.toUShort(), s.epoch), key)
         }
         // An ICMP/network error must not permanently cancel the periodic sender.
         try { active.send(bytes) }
-        catch (_: java.io.IOException) { sendFailures++; if (usb) active.close() }
+        catch (_: java.io.IOException) { sendFailures++; flight?.record(FlightEntry(FlightEvent.TRANSPORT_ERROR, reason = 1), s.arm) }
     }
 
     private fun receiveLoop() {
@@ -105,9 +114,14 @@ class UdpControllerClient(
                     val status = Pwr1.decodeStatus(data, key, session)
                     if (acceptPeerSequence(status.header.sequence)) {
                         val receivedAt = nowNanos()
+                        val sent = synchronized(history) { history[status.header.ack] }
+                        flight?.record(FlightEntry(FlightEvent.STATUS, sequence = status.header.sequence.toLong(), ack = status.header.ack.toLong(),
+                            accepted = 1, reason = status.reason, statusGapMs = if (lastPeerNs == 0L) 0 else (receivedAt - lastPeerNs) / 1_000_000,
+                            ackAgeMs = sent?.let { (receivedAt - it) / 1_000_000 } ?: -1, hostArmed = status.state), hostWasActive && status.state == 0)
+                        hostWasActive = status.state == 1
                         if (lastPeerNs != 0L) maxStatusGapMs = maxOf(maxStatusGapMs, (receivedAt - lastPeerNs) / 1_000_000)
                         lastPeerNs = receivedAt; helloAccepted = true; receivedStatuses++; onStatus(status)
-                    }
+                    } else flight?.record(FlightEntry(FlightEvent.REJECT, sequence = status.header.sequence.toLong(), accepted = 0, reason = 1))
                 }
                 PacketKind.HAPTIC -> {
                     val haptic = Pwr1.decodeHaptic(data, key, session)
@@ -117,20 +131,9 @@ class UdpControllerClient(
                 else -> Unit
             }
         } catch (_: java.io.IOException) {
-            // A USB timeout may be in the middle of a frame: discard the stream,
-            // never resume decoding from an unknown byte boundary. Keep session
-            // sequence numbers across reconnects so replay protection still holds.
-            if (usb) {
-                val failed = socket.getAndSet(null)
-                if (failed != null) {
-                    failed.close(); helloAccepted = false; lastHelloNs = Long.MIN_VALUE
-                    synchronized(history) { history.clear() }
-                    if (running.get()) onDisconnected()
-                }
-            }
-            else if (running.get()) Thread.sleep(10)
+            if (running.get()) Thread.sleep(10)
         }
-        catch (_: Exception) { if (running.get()) Thread.sleep(10) }
+        catch (_: Exception) { flight?.record(FlightEntry(FlightEvent.REJECT, accepted = 0, reason = 2)); if (running.get()) Thread.sleep(10) }
     }
 
     @Synchronized private fun acceptPeerSequence(candidate: UInt): Boolean {

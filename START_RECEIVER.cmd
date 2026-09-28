@@ -6,4 +6,4 @@ if not exist "release\receiver\PhoneWheel.Receiver.exe" (
   pause
   exit /b 1
 )
-"release\receiver\PhoneWheel.Receiver.exe"
+"release\receiver\PhoneWheel.Receiver.exe" --wifi --qr

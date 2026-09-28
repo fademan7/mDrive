@@ -8,7 +8,7 @@ internal sealed class PairingWindow : IDisposable
     private readonly CancellationTokenSource close = new();
     private string status = "Waiting · scan this QR on your phone";
 
-    public PairingWindow(string payload, string address, Action stop, bool usb = false, WendyService? wendy = null)
+    public PairingWindow(string payload, string address, Action stop, WendyService? wendy = null)
     {
         var thread = new Thread(() =>
         {
@@ -16,7 +16,7 @@ internal sealed class PairingWindow : IDisposable
             {
                 Application.EnableVisualStyles();
                 using var form = new Form {
-                    Text = usb ? "PhoneWheel · USB connection" : "PhoneWheel · Wi-Fi QR connection", ClientSize = new Size(660, 835),
+                    Text = "PhoneWheel · Wi-Fi QR connection", ClientSize = new Size(660, 835),
                     StartPosition = FormStartPosition.CenterScreen,
                     FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false,
                     BackColor = Color.FromArgb(22, 27, 33), ForeColor = Color.White,
@@ -58,13 +58,6 @@ internal sealed class PairingWindow : IDisposable
                     update.Tick += (_, _) => Refresh(); Refresh(); update.Start(); details.ShowDialog(form);
                 };
                 form.Controls.Add(debug);
-                if (usb) {
-                    title.Text = "Automatic USB connection";
-                    qr.Visible = false;
-                    form.Controls.Add(new Label { Text = "USB\n\nNo Wi-Fi or QR required\n\nPhone app starts automatically",
-                        Bounds = qr.Bounds, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 22, FontStyle.Bold) });
-                    instructions.Text = "Unlock phone and authorize USB debugging\nHold comfortably and release controls to start\nAfter recovery, release controls and center\nRestart receiver if phone/PC app was closed";
-                }
                 using var timer = new System.Windows.Forms.Timer { Interval = 250 };
                 timer.Tick += (_, _) => { if (close.IsCancellationRequested) form.Close(); else { state.Text = Volatile.Read(ref status); engineerStatus.Text = wendy?.Display ?? "F1 Engineer: OFF"; } };
                 form.FormClosed += (_, _) => stop();

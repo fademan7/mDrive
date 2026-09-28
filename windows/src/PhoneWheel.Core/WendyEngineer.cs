@@ -10,6 +10,10 @@ public sealed class WendyEngineer
 {
     private readonly Dictionary<string, double> spoken = [];
     private double lastAlert = double.NegativeInfinity;
+    private double lastReply = double.NegativeInfinity;
+    private double sessionObserved;
+    private int briefingTopic;
+    private readonly Dictionary<string, int> damageLevels = [];
     private int generation = -1;
     private string lastFlag = "UNKNOWN";
     private int? weather;
@@ -29,12 +33,36 @@ public sealed class WendyEngineer
     private int pendingGeneration;
     private double pendingAt;
     public List<SetupRecommendation> Recommendations { get; } = [];
+    private WendyIntent? lastQuery;
+    private string lastQueryText = "";
+    private double lastQueryAt;
+    private int lastQueryGeneration;
+    public void ResetConversation() { pending = null; lastQuery = null; lastQueryText = ""; }
     public WendyReply Answer(string text, double confidence, F1RaceState race, double now)
         => Answer(WendyLanguage.Fallback(text), text, confidence, race, now);
     public WendyReply Answer(WendyIntent intent, string text, double confidence, F1RaceState race, double now)
     {
+        lastReply = now;
+        // Repeat re-queries current telemetry, never replays a setting/plan/approval
+        // or an old numeric answer. Context is bounded to one topic for 30 seconds.
+        if (intent.Intent is DriverIntent.REPEAT_QUERY or DriverIntent.FOLLOW_UP_WHEEL) {
+            if (lastQuery == null || lastQueryGeneration != race.Generation || now - lastQueryAt is < 0 or > 30000)
+                return new("Which race information would you like?");
+            if (intent.Intent == DriverIntent.FOLLOW_UP_WHEEL) {
+                if (lastQuery.Intent is not (DriverIntent.GET_TYRE_STATUS or DriverIntent.GET_TYRE_TEMPERATURE or DriverIntent.GET_TYRE_PRESSURE or DriverIntent.GET_BRAKE_TEMPERATURE))
+                    return new("Tyre wear, temperature, or pressure?");
+                intent = lastQuery with { Wheel = intent.Wheel };
+            } else { intent = lastQuery; text = lastQueryText; }
+        }
+        if (intent.Intent.ToString().StartsWith("GET_", StringComparison.Ordinal)) {
+            lastQuery = intent; lastQueryText = text; lastQueryAt = now; lastQueryGeneration = race.Generation;
+        } else { lastQuery = null; lastQueryText = ""; }
+        return AnswerCore(intent, text, confidence, race, now);
+    }
+    private WendyReply AnswerCore(WendyIntent intent, string text, double confidence, F1RaceState race, double now)
+    {
         if (text.Length > 240) return new("Please use a short English request.");
-        var q = Regex.Replace(text.ToLowerInvariant().Replace("’", "'"), "[^a-z0-9 ]", "").Trim();
+        var q = WendyNaturalLanguage.Request(text);
         if (intent.Intent == DriverIntent.REJECT) { pending = null; return new("Understood. No change made."); }
         if (intent.Intent == DriverIntent.CONFIRM) {
             if (!WendyLanguage.IsConfirm(text) || !double.IsFinite(confidence) || confidence < .75) return new("Please clearly confirm or reject the recommendation.", "rejected");
@@ -62,10 +90,18 @@ public sealed class WendyEngineer
             }
             return new("Game setting changes are not enabled. Please use the game controls.", "unsupported");
         }
-        if (intent.Intent == DriverIntent.UNKNOWN) return new("I didn't understand that.");
+        if (intent.Intent == DriverIntent.UNKNOWN) return new("Please ask one topic: gaps, tyres, fuel, damage, or pit advice.");
+        if (intent.Intent == DriverIntent.SMALL_TALK) return new(WendyNaturalLanguage.Chat(text));
         if (intent.Intent == DriverIntent.RADIO_CHECK) return new("Loud and clear. Wendy received your request.");
         if (intent.Intent == DriverIntent.GET_HELP) return new("Ask about tyres, temperatures, gaps, fuel, ERS, damage, DRS, laps, penalties, weather or pit advice. Box box sets a reminder, not a game command.");
         if (!race.Live(now)) return new("Telemetry unavailable. Check F1 UDP format 2025 and resume the session.");
+        if (intent.Intent == DriverIntent.GET_RACE_SUMMARY) {
+            if (!F1RaceState.Fresh(race.LapMs, now)) return Missing("Race summary");
+            var summary = $"P {race.Position}, lap {race.Lap}. {FlagText(race.Flag(now))}";
+            if (race.Ahead is double gap) summary += $" Ahead {N(gap)} seconds.";
+            if (race.Behind is double behind) summary += $" Behind {N(behind)} seconds.";
+            return new(summary);
+        }
         if (WendyDataQueries.Answer(intent.Intent, race, now) is { } dataReply) return dataReply;
         bool Fresh(double time) => F1RaceState.Fresh(time, now);
         if (intent.Intent == DriverIntent.GET_PIT_ADVICE) return PitAdvice(race, now);
@@ -107,7 +143,8 @@ public sealed class WendyEngineer
         if (intent.Intent == DriverIntent.GET_FUEL) return Fresh(race.StatusMs) ? new($"Fuel is {N(race.FuelKg)} kilograms. MFD fuel estimate is {N(race.FuelMfdLaps)} laps.") : Missing("Fuel");
         // UDP provides joules, not a universal battery capacity across game seasons.
         if (intent.Intent == DriverIntent.GET_ERS) return Fresh(race.StatusMs) ? new($"ERS store is {N(race.ErsJoules / 1_000_000)} megajoules.") : Missing("ERS");
-        if (intent.Intent == DriverIntent.GET_DAMAGE) return !Fresh(race.DamageMs) ? Missing("Damage") : WendyDataQueries.Damage(q, race) ?? (race.FrontWing > 0 ? new($"Front wing damage is {race.FrontWing} percent.") : race.OtherDamage > 0 ? new($"Damage detected, up to {race.OtherDamage} percent. Check the damage panel.") : new("No damage detected in monitored components."));
+        if (intent.Intent == DriverIntent.GET_DAMAGE) return !Fresh(race.DamageMs) ? Missing("Damage") :
+            WendyDataQueries.Damage(q, race) is { } detail ? new(detail.Text + " " + WendyDamage.PitGuidance(race)) : new(WendyDamage.Summary(race));
         if (intent.Intent == DriverIntent.GET_WEATHER) return new($"Current weather: {WeatherName(race.Weather)}.");
         if (intent.Intent == DriverIntent.GET_FLAGS) return race.Flag(now) == "UNKNOWN" ? Missing("Flag status") : new(FlagText(race.Flag(now)));
         if (intent.Intent == DriverIntent.GET_LAP) return Fresh(race.LapMs) && race.Lap > 0 ? new($"You are on lap {race.Lap}.") : Missing("Lap");
@@ -123,7 +160,7 @@ public sealed class WendyEngineer
         if (!F1RaceState.Fresh(r.LapMs, now)) return Missing("Pit strategy");
         if (r.Pit != 0) return new("You are already pitting.");
         if (F1RaceState.Fresh(r.DamageMs, now)) {
-            if (r.FrontWing >= 20 || r.OtherDamage >= 30) return new("Significant damage. Consider pitting for repairs. Not all damage is repairable.");
+            if (r.FrontWing >= 20 || r.OtherDamage >= 30) return new(WendyDamage.Summary(r));
             if (r.Wear.Max() >= 70) return new("Tyre wear is above 70 percent. Consider pitting soon.");
         }
         if (F1RaceState.Fresh(r.StatusMs, now) && r.Weather >= 3 && r.TyreCompound is >= 16 and <= 22)
@@ -141,7 +178,7 @@ public sealed class WendyEngineer
     // No speech backlog: evaluate current conditions only when Android is idle.
     public WendyReply? Alert(F1RaceState race, double now)
     {
-        if (generation != race.Generation) { generation = race.Generation; spoken.Clear(); crossed.Clear(); weather = pit = null; lastFlag = "UNKNOWN"; lastAlert = double.NegativeInfinity; lastPenalty = lastWarnings = lastDriveThrough = lastStopGo = 0; followingCar = -1; followingReported = false; followingSince = double.NegativeInfinity; }
+        if (generation != race.Generation) { generation = race.Generation; spoken.Clear(); crossed.Clear(); damageLevels.Clear(); sessionObserved = now; briefingTopic = 0; weather = pit = null; lastFlag = "UNKNOWN"; lastAlert = double.NegativeInfinity; lastPenalty = lastWarnings = lastDriveThrough = lastStopGo = 0; followingCar = -1; followingReported = false; followingSince = double.NegativeInfinity; }
         if (!race.Live(now)) return null;
         if (pending != null && (pendingGeneration != race.Generation || now - pendingAt > 30000)) pending = null;
         string? key = null, text = null;
@@ -178,9 +215,19 @@ public sealed class WendyEngineer
                     return Speak(key, $"{new[] {"Rear left", "Rear right", "Front left", "Front right"}[wheel]} tyre wear is above {threshold} percent.", now);
                 }
             }
-            var damage = Math.Max(race.FrontWing, race.OtherDamage);
-            if (damage < 5) crossed.Remove("damage");
-            if (damage >= 10 && !crossed.Contains("damage") && Sendable("damage", now, 120000)) { crossed.Add("damage"); return Speak("damage", race.FrontWing >= 10 ? "Front wing damage detected." : "Significant damage detected. Check the damage panel.", now); }
+            var findings = WendyDamage.Findings(race);
+            int Level(WendyDamage.Finding f) => f.Fault ? 3 : f.Key is "part:10" or "part:11" or "part:12" or "part:13" or "part:14" or "part:15"
+                ? f.Value >= 95 ? 3 : f.Value >= 85 ? 2 : f.Value >= 70 ? 1 : 0
+                : f.Value >= 40 ? 3 : f.Value >= 20 ? 2 : f.Value >= 10 ? 1 : 0;
+            foreach (var oldKey in damageLevels.Keys.ToArray()) {
+                var current = findings.FirstOrDefault(f => f.Key == oldKey);
+                if (current == null || Level(current) < damageLevels[oldKey]) damageLevels[oldKey] = current == null ? 0 : Level(current);
+            }
+            var worsening = findings.Where(f => Level(f) > damageLevels.GetValueOrDefault(f.Key)).ToArray();
+            if (worsening.Length > 0 && Sendable("damage", now, 30000)) {
+                foreach (var f in worsening.Take(3)) damageLevels[f.Key] = Level(f);
+                return Speak("damage", string.Join(" ", worsening.Take(3).Select(f => f.Text)) + " " + WendyDamage.PitGuidance(race), now);
+            }
         }
         if (F1RaceState.Fresh(race.StatusMs, now))
         {
@@ -210,6 +257,23 @@ public sealed class WendyEngineer
         if (pending == null && Sendable("setup-review", now, 300000)) {
             var suggestion = Patterns.Suggest(new(DriverIntent.DRIVER_FEEDBACK, Patterns.RepeatedHeat ? DriverSymptom.TYRE_OVERHEATING : DriverSymptom.UNEVEN_WEAR), race, now);
             if (suggestion != null) { pending = suggestion; pendingAt = now; pendingGeneration = race.Generation; return Speak("setup-review", suggestion.Observation + " Save a garage review recommendation for next session?", now); }
+        }
+        // Optional useful radio traffic, never filler, stale facts, or during a
+        // corner/braking/flags. Existing urgent events retain priority above.
+        if (flag == "GREEN" && race.Pit == 0 && race.Result == 2 &&
+            F1RaceState.Fresh(race.LapMs, now) && F1RaceState.Fresh(race.TelemetryMs, now) &&
+            race.SpeedKph >= 80 && Math.Abs(race.Steer) < .1 && race.Brake < .05 &&
+            now - Math.Max(sessionObserved, Math.Max(lastAlert, lastReply)) >= 60000) {
+            for (var attempt = 0; attempt < 3; attempt++) {
+                var topic = briefingTopic++ % 3;
+                var briefing = topic switch {
+                    0 when race.Ahead is double ahead => $"Gap ahead {N(ahead)} seconds." + (race.Behind is double behind ? $" Behind {N(behind)} seconds." : ""),
+                    1 when F1RaceState.Fresh(race.DamageMs, now) => $"Highest tyre wear {Math.Round(race.Wear.Max())} percent." + (race.Wear.Max() >= 55 ? " Plan your next stop around tyre condition." : ""),
+                    2 when F1RaceState.Fresh(race.StatusMs, now) => $"Fuel {N(race.FuelKg)} kilograms. MFD fuel estimate {N(race.FuelMfdLaps)} laps.",
+                    _ => null
+                };
+                if (briefing != null && Sendable($"briefing:{topic}", now, 180000)) return Speak($"briefing:{topic}", briefing, now);
+            }
         }
         return null;
     }

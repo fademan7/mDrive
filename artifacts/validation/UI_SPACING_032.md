@@ -13,7 +13,7 @@
 
 ## Wi-Fi
 
-읽기 전용 검사에서 실행 중 Receiver의 UDP 172.30.1.90:26760, Wendy TCP 172.30.1.90:26762, Telemetry UDP 127.0.0.1:20777 리스너 확인. Wi-Fi 프로필은 Public, PhoneWheel.Receiver 인바운드 Allow/Public 규칙 2개 확인. 이 검사는 폰에서 오는 실제 패킷의 통과까지 증명하지는 않음.
+읽기 전용 검사에서 실행 중 Receiver의 UDP [LAN-IP redacted]:26760, Wendy TCP [LAN-IP redacted]:26762, Telemetry UDP 127.0.0.1:20777 리스너 확인. Wi-Fi 프로필은 Public, PhoneWheel.Receiver 인바운드 Allow/Public 규칙 2개 확인. 이 검사는 폰에서 오는 실제 패킷의 통과까지 증명하지는 않음.
 
 사용자가 재연결 후 Wi-Fi 정상 연결을 확인함. 일시 실패의 정확한 원인은 미확정. 연결 코드/방화벽 변경이나 Receiver 재시작은 하지 않음.
 

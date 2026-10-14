@@ -4,7 +4,7 @@
 
 The user reported AUTO failure/ERROR↔IDLE, a controller interruption during AUTO→PTT, wanted PTT hidden in AUTO, varied race greetings and broader telemetry conversation coverage. Preserve existing wheel/pedal/right-stick mapping and all safety deadlines.
 
-Real phone logs contained both controller reply losses/timeouts and Wendy IDLE/ERROR without microphone-start entries. This does **not** identify a single proven cause for the reported race incident. The PC Receiver was not running at inspection and its current Wi-Fi address had changed to 172.30.1.58. Android support probing confirms the system recognizer works while an English on-device model is absent. Do not equate service availability with a downloaded language.
+Real phone logs contained both controller reply losses/timeouts and Wendy IDLE/ERROR without microphone-start entries. This does **not** identify a single proven cause for the reported race incident. The PC Receiver was not running at inspection and its current Wi-Fi address had changed to [LAN-IP redacted]. Android support probing confirms the system recognizer works while an English on-device model is absent. Do not equate service availability with a downloaded language.
 
 ## Changes
 
@@ -32,7 +32,7 @@ Real phone logs contained both controller reply losses/timeouts and Wendy IDLE/E
 
 New EXE copied to `release/receiver/PhoneWheel.Receiver.exe`; SHA256 **E9EF897E7508AF709FDA0EB2EF608AFB794937B9215A2857432B779E78D81E7A**. Previous executable preserved at `release/backups/PhoneWheel.Receiver-before-052.exe`. Existing CPU bundle retained. User approved installation, microphone tests and Receiver restart with the game paused.
 
-Normal Receiver launched successfully as PID **168440**, Responding=true, title **PhoneWheel · Wi-Fi QR connection**. Current bind **172.30.1.58**, UDP26760 controller, TCP26762 Wendy, loopback UDP20777 F1 telemetry verified. Scan the new QR; previous pairing is obsolete. No further interruption was made after starting this final normal receiver. Phone-side long re-listen verification must use null output again with a paused game, not this gamepad-enabled receiver.
+Normal Receiver launched successfully as PID **168440**, Responding=true, title **PhoneWheel · Wi-Fi QR connection**. Current bind **[LAN-IP redacted]**, UDP26760 controller, TCP26762 Wendy, loopback UDP20777 F1 telemetry verified. Scan the new QR; previous pairing is obsolete. No further interruption was made after starting this final normal receiver. Phone-side long re-listen verification must use null output again with a paused game, not this gamepad-enabled receiver.
 
 Not all UDP packets/conversations or game operations are supported. No weather forecasting, automatic pit/menu controls, optimal strategy model, guaranteed never-disconnecting Wi-Fi, or continuous background microphone. Long sessions and actual spoken questions in the game still need user verification. Radio check should be tried before racing. Use AUTO system on this device unless English is installed for the on-device recognizer.
 

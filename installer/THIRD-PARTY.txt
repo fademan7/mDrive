@@ -1,0 +1,41 @@
+mDrive 0.5.13 third-party components
+
+Full license texts are included beside this file. This is a component inventory,
+not a license grant for mDrive itself. Preserve all upstream notices.
+
+Vosk API 0.3.38 - Alpha Cephei Inc - Apache-2.0
+https://github.com/alphacep/vosk-api
+vosk-model-small-en-us-0.15 - Apache-2.0 (upstream model catalog)
+https://alphacephei.com/vosk/models
+Model README retained in speech/vosk-model-small-en-us-0.15/README.
+Kaldi / OpenFst dependencies - Apache-2.0; OpenBLAS - BSD-3-Clause.
+
+Vosk's unmodified Windows native package includes libgcc_s_seh-1.dll,
+libstdc++-6.dll and libwinpthread-1.dll. GCC GPL-3.0 plus GCC Runtime Library
+Exception 3.1 and the winpthreads notices are included. Upstream source:
+https://gcc.gnu.org/ and https://github.com/mingw-w64/mingw-w64
+No modifications to those binaries are made by mDrive.
+
+NAudio.Core / NAudio.WinMM 2.2.1 - Mark Heath and contributors - MIT
+https://github.com/naudio/NAudio
+QRCoder 1.6.0 - Raffael Herrmann and contributors - MIT
+https://github.com/codebude/QRCoder
+Nefarius.ViGEm.Client 1.21.256 / ViGEmClient - MIT
+https://github.com/nefarius/ViGEm.NET
+https://github.com/nefarius/ViGEmClient
+ViGEmBus official installer 1.22.0 - Nefarius Software Solutions e.U.
+BSD-3-Clause, end-of-life; installer is not modified or re-signed.
+https://github.com/nefarius/ViGEmBus/releases/tag/v1.22.0
+
+.NET 10 runtime / Windows Desktop runtime / System.Speech 10.0.0
+Microsoft and .NET contributors - MIT and bundled third-party notices
+https://github.com/dotnet/runtime
+https://github.com/dotnet/wpf
+
+Installer built with Inno Setup 6.7.3 (compiler not redistributed here).
+https://jrsoftware.org/isinfo.php
+Review Inno Setup's commercial licensing before commercial distribution.
+
+Speech-model and driver archive SHA-256 values are pinned in
+tools/prepare-speech-assets.ps1 in the source repository.
+This preview app/installer has not been Authenticode-signed by mDrive's author.

@@ -62,6 +62,7 @@ internal sealed class CpuIntentModel(string? bundle = null) : IDisposable
         GET_FLAGS: asking current flag, yellow/red/blue, safety car/VSC.
         GET_PENALTIES: asking penalties, warnings, track limits.
         GET_PIT_STATUS: ONLY asking current physical location, already pitting or currently in pit lane. Never recommendations or future stops.
+        GET_PIT_INFORMATION: asking for a pit stop information/report, completed stops and the game pit window. Read-only, never a request to box or change tyres.
         GET_PIT_ADVICE: asking whether/when a pit stop is a good idea, advisable, needed, best timing, strategy, should I pit, or pit window. Questions about a future stop are advice, NOT current status.
         GET_LAP_REPORT: last lap time, pace, whether getting faster.
         GET_COACHING: asking for driving advice or corner comparison.

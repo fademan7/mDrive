@@ -29,7 +29,7 @@ class UdpControllerClient(
     private val running = AtomicBoolean(true)
     private val snapshot = AtomicReference(ControllerSnapshot())
     private val history = LinkedHashMap<UInt, Long>()
-    @Volatile private var sequence = 0u
+    @Volatile private var sequence = (nowNanos() / 1_000_000).toUInt()
     @Volatile private var peerSequence = 0u
     @Volatile private var peerSequenceSeen = false
     @Volatile private var helloAccepted = false
@@ -38,10 +38,19 @@ class UdpControllerClient(
     @Volatile var sendFailures = 0; private set
     @Volatile var maxSendGapMs = 0L; private set
     @Volatile var receivedStatuses = 0L; private set
+    @Volatile var receivedHaptics = 0L; private set
+    @Volatile var rejectedHaptics = 0L; private set
     @Volatile var maxStatusGapMs = 0L; private set
     private var previousSendNs = 0L
     private var previousReady = false
     private var hostWasActive = false
+    private val reopen = AtomicBoolean(false)
+    private val recovery = TransportRecovery(nowNanos())
+
+    // UI only posts a request. DNS/socket work stays on the receive worker.
+    fun resumeConnection() {
+        if (recovery.due(nowNanos(), lastPeerNs, resumed = true)) reopen.set(true)
+    }
 
     init {
         executor.execute(::receiveLoop)
@@ -63,6 +72,7 @@ class UdpControllerClient(
         // clearing READY for one packet and disarming the PC during normal input.
         val s = snapshot.get()
         val nowNs = nowNanos()
+        if (recovery.due(nowNs, lastPeerNs)) reopen.set(true)
         val gapMs = if (previousSendNs == 0L) 0 else (nowNs - previousSendNs) / 1_000_000
         if (previousSendNs != 0L) maxSendGapMs = maxOf(maxSendGapMs, (nowNs - previousSendNs) / 1_000_000)
         previousSendNs = nowNs
@@ -74,7 +84,7 @@ class UdpControllerClient(
         val paired = helloAccepted
         if (!paired && lastHelloNs != Long.MIN_VALUE && nowNs - lastHelloNs < 333_333_333) return
         if (!paired) lastHelloNs = nowNs
-        sequence++
+        sequence = ControllerPacketSequence.next(sequence, nowNs / 1_000_000)
         // Receive can complete the handshake concurrently. Header and body must
         // use one snapshot, otherwise a codec failure stops the scheduled sender.
         val controlKind = if (s.controls.lookX != 0f || s.controls.lookY != 0f) PacketKind.CONTROL_LOOK else PacketKind.CONTROL
@@ -101,8 +111,14 @@ class UdpControllerClient(
 
     private fun receiveLoop() {
         while (running.get()) try {
+            if (reopen.getAndSet(false)) {
+                socket.getAndSet(null)?.close()
+                helloAccepted = false; lastHelloNs = Long.MIN_VALUE
+                flight?.record(FlightEntry(FlightEvent.RECONNECT, reason = 2), true)
+                // Keep monotonic packet/peer sequences and authentication.
+                // An old STATUS or pedal snapshot must not gain a new lifetime.
+            }
             if (socket.get() == null) {
-                Thread.sleep(500)
                 if (!running.get()) break
                 val replacement = newTransport()
                 socket.set(replacement)
@@ -126,11 +142,17 @@ class UdpControllerClient(
                 PacketKind.HAPTIC -> {
                     val haptic = Pwr1.decodeHaptic(data, key, session)
                     val sent = synchronized(history) { history[haptic.header.ack] }
-                    if (sent != null && nowNanos() - sent in 0..100_000_000 && acceptPeerSequence(haptic.header.sequence)) onHaptic(haptic)
+                    if (sent != null && nowNanos() - sent in 0..100_000_000 && acceptPeerSequence(haptic.header.sequence)) {
+                        receivedHaptics++; onHaptic(haptic)
+                    } else rejectedHaptics++
                 }
                 else -> Unit
             }
         } catch (_: java.io.IOException) {
+            // A demonstrably closed socket cannot recover by waiting. Ordinary
+            // UDP timeouts/ICMP errors keep the socket and the silence policy.
+            if (socket.get()?.isClosed == true && running.get()) reopen.set(true)
+            if (socket.get() == null && running.get()) Thread.sleep(250)
             if (running.get()) Thread.sleep(10)
         }
         catch (_: Exception) { flight?.record(FlightEntry(FlightEvent.REJECT, accepted = 0, reason = 2)); if (running.get()) Thread.sleep(10) }

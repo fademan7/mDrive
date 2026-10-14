@@ -5,7 +5,7 @@ namespace PhoneWheel.Core;
 
 public enum DriverIntent { UNKNOWN, GET_GAP_AHEAD, GET_GAP_BEHIND, GET_TYRE_STATUS, GET_FUEL, GET_ERS, GET_DAMAGE, GET_POSITION, GET_LAP, GET_WEATHER, GET_FLAGS, GET_PENALTIES, GET_PIT_STATUS, GET_BRAKE_BIAS, GET_DIFFERENTIAL, DRIVER_FEEDBACK, CONFIRM, REJECT, CHANGE_SETTING, GET_PIT_ADVICE, PLAN_PIT, CANCEL_PIT, GET_LAP_REPORT, GET_COACHING, GET_TYRE_TEMPERATURE, GET_TYRE_PRESSURE, GET_TYRE_AGE, GET_BRAKE_TEMPERATURE, GET_ENGINE_TEMPERATURE, GET_LAPS_REMAINING,
     RADIO_CHECK, GET_HELP, GET_SPEED, GET_GEAR, GET_RPM, GET_DRS, GET_TYRE_COMPOUND, GET_TRACK_TEMPERATURE, GET_AIR_TEMPERATURE, GET_SESSION_TIME, GET_PIT_LIMITER, GET_PIT_STOPS, GET_WING_SETUP, GET_LAP_VALIDITY, GET_LAST_LAP_TIME, GET_SECTOR, GET_ERS_MODE, GET_WEATHER_FORECAST, GET_GAP_LEADER,
-    SMALL_TALK, GET_RACE_SUMMARY, REPEAT_QUERY, FOLLOW_UP_WHEEL }
+    SMALL_TALK, GET_RACE_SUMMARY, REPEAT_QUERY, FOLLOW_UP_WHEEL, GET_PIT_INFORMATION }
 public enum DriverSymptom { NONE, UNDERSTEER, OVERSTEER, REAR_INSTABILITY, POOR_TRACTION, WHEELSPIN, FRONT_LOCKING, REAR_BRAKING_INSTABILITY, HIGH_SPEED_INSTABILITY, KERB_INSTABILITY, TYRE_OVERHEATING, UNEVEN_WEAR, EXCESSIVE_DEGRADATION, AERO_BALANCE, BOTTOMING, WEAK_ROTATION, STRAIGHT_LINE_SPEED }
 public enum CornerPhase { UNKNOWN, CORNER_ENTRY, MID_CORNER, CORNER_EXIT, STRAIGHT }
 public enum DrivingCondition { UNKNOWN, ON_THROTTLE, ON_BRAKE, COASTING, OVER_KERB, HIGH_SPEED }
@@ -55,13 +55,15 @@ public static class WendyLanguage
     public static string Normalize(string text) => Regex.Replace(Regex.Replace(text.ToLowerInvariant().Replace('’', '\'').Replace("'", "").Replace('-', ' '), "[^a-z0-9 ]", " "), " +", " ").Trim();
     public static bool IsConfirm(string text) => Normalize(text) is "yes" or "agree" or "agreed" or "yeah do it" or "sounds good" or "go ahead" or "yes do it" or "do it";
     public static bool IsReject(string text) => Normalize(text) is "no" or "no leave it" or "dont change it" or "leave it" or "reject" or "cancel";
-    public static bool IsCommand(string text) => Regex.IsMatch(WendyNaturalLanguage.Request(text), @"^(set|increase|decrease|change|adjust|box|pit this lap)\b") || Normalize(text).Contains("next stop");
+    public static bool IsCommand(string text) => Regex.IsMatch(WendyNaturalLanguage.Request(text), @"^(set|increase|decrease|reduce|move brake bias|change|adjust|box|pit this lap)\b") || Normalize(text).Contains("next stop");
     // Closed phrases for plans; negative/ambiguous phrases never become a plan.
     public static WendyIntent? RaceRequest(string text) {
         if (text.Length is 0 or > 240) return WendyIntent.Unknown;
         if (IsConfirm(text)) return new(DriverIntent.CONFIRM);
         if (IsReject(text)) return new(DriverIntent.REJECT);
         var q = WendyNaturalLanguage.Request(text);
+        if (WendyMenuActions.TryParse(text, out var pitCommand)) return new(pitCommand == WendyPitCommand.Box ? DriverIntent.PLAN_PIT : DriverIntent.CHANGE_SETTING);
+        if (WendyMenuActions.LooksLikeRequest(text)) return new(DriverIntent.CHANGE_SETTING);
         if (Regex.IsMatch(q, @"\b(ignore|override|forget)\b.*\b(rules|instructions|prompt)\b")) return WendyIntent.Unknown;
         if (WendyDataQueries.Match(q) is { } dataQuery) return new(dataQuery);
         if (Regex.IsMatch(q, @"^(what is|whats|tell me) (my |the |current )?brake (bias|balance)( value)?$")) return new(DriverIntent.GET_BRAKE_BIAS);

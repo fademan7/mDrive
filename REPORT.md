@@ -42,7 +42,7 @@
 - 기본 실행은 ViGEm 출력, LAN IP 자동 선택, 연결 정보 표시 및 4Hz 입력 모니터입니다. 모니터는 수신/출력 watchdog과 별도 작업입니다.
 - 단일 EXE에서 실제 ViGEm 초기화 후 0.5초 종료 시험 exit 0, C# 기존 8/8 groups PASS. 사용자용 리시버 창을 실행해 두었습니다.
 - Fold5 APK 설치 `Success`, Android 16, 앱 화면 확인. 증거: `artifacts/validation/phonewheel-device-screen.png`.
-- PC Wi-Fi 172.30.1.59 / 폰 Wi-Fi 172.30.1.71을 확인했으나 자동 입력 중 ADB 연결이 끊겨 end-to-end 입력 확인은 미완료입니다.
+- PC Wi-Fi [LAN-IP redacted] / 폰 Wi-Fi [LAN-IP redacted]을 확인했으나 자동 입력 중 ADB 연결이 끊겨 end-to-end 입력 확인은 미완료입니다.
 - 공용 네트워크에 휴대폰 IP 한정 영구 방화벽 규칙을 추가하려던 작업은 자동 승인 검토가 명시적 승인 부족으로 거부했습니다. 방화벽 변경은 수행하지 않았습니다.
 
 ## 전체화면 페달 및 180° 조향 후속

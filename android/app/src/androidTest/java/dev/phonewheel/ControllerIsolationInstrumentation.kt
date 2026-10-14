@@ -17,6 +17,28 @@ class ControllerIsolationInstrumentation : Instrumentation() {
     private lateinit var args: Bundle
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); args = arguments ?: Bundle(); start() }
     override fun onStart() {
+        if (args.getString("hapticOnly") == "true") {
+            val result=Bundle()
+            try {
+                startActivitySync(Intent(targetContext,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                Thread.sleep(1500)
+                val scheduler=HapticScheduler(targetContext)
+                check(scheduler.gameRumbleEnabled){"Game rumble preference disabled"}
+                val manager=targetContext.getSystemService(android.os.VibratorManager::class.java)
+                check(manager.defaultVibrator.hasVibrator()){"No phone vibrator"}
+                val header=Header(PacketKind.HAPTIC,1uL,1u,0uL,0u)
+                for(level in 1..3) {
+                    repeat(12) {runOnMainSync{scheduler.offer(HapticFrame(header,8,level,100))};Thread.sleep(50)}
+                    Thread.sleep(350)
+                }
+                runOnMainSync{scheduler.cancel()}
+                result.putString("result","PASS default game rumble levels submitted; physical sensation requires user confirmation")
+                finish(0,result)
+            } catch(e:Throwable) {result.putString("failure",e.message);finish(1,result)}
+            return
+        }
+        if (args.getString("resumeOnly") == "true") { ControllerResumeTest.run(this, args); return }
+        if (args.getString("uiOnly") == "true") { ControllerSurfaceTest.run(this); return }
         if (args.getString("soakSeconds") != null) { ControllerSoak.run(this, args); return }
         val result = Bundle()
         var failureDiagnostics: (() -> Unit)? = null
@@ -60,6 +82,24 @@ class ControllerIsolationInstrumentation : Instrumentation() {
             releaseTouch = { touch(android.view.MotionEvent.ACTION_UP) }
             touch(android.view.MotionEvent.ACTION_DOWN)
             check((field("throttle") as Float) in .49f.. .51f) { "Pedal pointer did not reach 50 percent" }
+            val originalValues = pedals.onValues
+            var interrupted = false
+            runOnMainSync { pedals.onValues = { b,t,k -> if(t !in .49f.. .51f) interrupted=true; originalValues?.invoke(b,t,k) } }
+            repeat(20) {
+                runOnMainSync {
+                    val properties = arrayOf(android.view.MotionEvent.PointerProperties().apply { id=0; toolType=1 }, android.view.MotionEvent.PointerProperties().apply { id=1; toolType=1 })
+                    val coords = arrayOf(android.view.MotionEvent.PointerCoords().apply { x=pedals.width*.9f; y=pedals.height*.5f; pressure=1f; size=1f }, android.view.MotionEvent.PointerCoords().apply { x=pedals.width*.5f; y=pedals.height*.968f; pressure=1f; size=1f })
+                    for (action in listOf(android.view.MotionEvent.ACTION_POINTER_DOWN, android.view.MotionEvent.ACTION_POINTER_UP)) {
+                        val event=android.view.MotionEvent.obtain(downAt,android.os.SystemClock.uptimeMillis(),action or (1 shl 8),2,properties,coords,0,0,1f,1f,0,0,android.view.InputDevice.SOURCE_TOUCHSCREEN,0)
+                        try { activity.dispatchTouchEvent(event) } finally { event.recycle() }
+                    }
+                    check((field("buttons") as Number).toInt() == 0) { "Former switch area generated a button" }
+                    check(!interrupted && (field("throttle") as Float) in .49f.. .51f && field("client") === controller && field("epoch") == epochBefore && field("arm") == true) { "Empty bottom area interrupted held controls or session" }
+                }
+                Thread.sleep(50)
+            }
+            runOnMainSync { pedals.onValues = originalValues }
+            result.putInt("emptyBottomHeldPedalTaps",20)
             val voice = field("wendy") as WendyVoice
             runOnMainSync { voice.enable(true) }
             Thread.sleep(1200)
@@ -77,9 +117,9 @@ class ControllerIsolationInstrumentation : Instrumentation() {
                     runOnMainSync { call("showWendyOptions"); voice.setAlwaysListening(true, false) }
                     Thread.sleep(3500)
                     runOnMainSync {
-                        check((field("pttButton") as android.view.View).visibility == android.view.View.GONE) { "AUTO PTT not hidden" }
+                        check(voice.alwaysListening) { "AUTO state missing" }
                         voice.setAlwaysListening(false)
-                        check((field("pttButton") as android.view.View).visibility == android.view.View.VISIBLE) { "PTT not restored" }
+                        check(!voice.alwaysListening) { "PTT mode not restored" }
                         call("closeInlinePanel")
                     }
                     check(field("client") === controller && field("arm") == true && field("epoch") == epochBefore) { "AUTO/PTT disturbed controller" }

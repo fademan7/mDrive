@@ -65,7 +65,7 @@ internal static class DropoutTests
             Check(x.Gate.GetDiagnostics(490).ReleaseCount == 1, "release accounting");
             Console.WriteLine("  170ms outage: neutral at 150ms, new-input recovery at 170ms; no dwell or stale replay");
         }
-        foreach (var failure in new[] { "deadline", "late-watchdog", "output", "sensor", "focus", "arm", "epoch", "hello" }) {
+        foreach (var failure in new[] { "output", "sensor", "focus", "arm", "epoch" }) {
             var x = new Link(); x.Arm(); x.Send(320, new(.8f, 1, 0), 31);
             x.Gate.Tick(failure == "late-watchdog" ? 570 : 470);
             if (failure == "deadline") x.Gate.Tick(570);
@@ -86,7 +86,17 @@ internal static class DropoutTests
         repeated.Gate.NoteServerSend(++repeated.Ack, 469);
         for (var t = 480; t < 570; t += 10) repeated.Send(t, new(.8f, 1, 0), 31, false);
         repeated.Send(570, new(.8f, 1, 0), 31);
-        Check(!repeated.Gate.Armed && repeated.Gate.Output.IsNeutral, "rejected proof extended recovery deadline");
+        Check(repeated.Gate.Armed, "fresh proof after outage must not require neutral dwell");
+        foreach (var duration in new[] { 300, 1000, 5000, 30000 }) {
+            var x = new Link(); x.Arm(); x.Send(320, new(.8f, 1, 0), 31);
+            Check(x.Gate.Tick(320 + duration).IsNeutral, "long outage must neutralize, including late watchdog");
+            Check(x.Gate.AcceptInitialHello(Pwr1Codec.EncodeHello(new(new(PacketKind.Hello, 42, ++x.Seq, 0, 0)), Key), true), "authenticated reconnect");
+            Check(x.Gate.Output.IsNeutral, "HELLO cannot restore output");
+            Check(!x.Send(321 + duration, new(.8f, 1, 0), 31, false), "HELLO must invalidate old challenges");
+            var fresh = new Controls(-.2f, .35f, .6f);
+            Check(x.Send(340 + duration, fresh, 31) && x.Gate.Output == fresh && x.Gate.Armed, "new held input must resume after proven reconnect");
+            Check(x.Gate.GetDiagnostics(340 + duration).ReleaseCount == 1, "one outage one release");
+        }
     }
     public static void DistinctFaults() {
         foreach (var (flags, reason) in new[] { ((ushort)13, ReleaseReason.Sensor), ((ushort)11, ReleaseReason.Inactive), ((ushort)14, ReleaseReason.User) }) {

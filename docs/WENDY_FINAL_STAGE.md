@@ -1,5 +1,29 @@
 # Final stage: verified game actions and strategy
 
+## 0.5.11 decision (supersedes menu/OCR experiments below)
+
+The user cancelled OCR/menu automation on 2026-10-07. Game radio commands are
+handled by F1's own speech recognition. LB keeps its gamepad bit and pauses Wendy
+recognition/TTS while held and for 8 seconds after release. No T-key injection,
+screen capture, audio forwarding or controller-session restart is used. Earlier
+trial notes below are historical, not currently supported functionality.
+
+## 0.5.9 limited experiment
+
+The user authorized an operator-calibrated radio/MFD sequence experiment.
+See [practice-only menu trial](WENDY_MENU_TRIAL.md). This is NOT verified pit/tyre
+automation or race-ready support. No actual F1 trial has passed yet.
+
+## 0.5.7 status (supersedes the historical deferral below)
+
+The user authorized this stage. Android 0.5.8 later removed Race/Menu switching
+and standalone PTT; the original gamepad remains, with LB for manual PTT.
+Tyre ranges and repeated-feedback
+advice are implemented. BB/Diff use opt-in direct shortcuts with telemetry
+verification; actual F1 testing is still pending. Pit request/next-stop tyres/wing
+remain unsupported, rather than using blind macros. See [current setup and
+limitations](WENDY_057.md). The remainder records the original 0.5.6 deferral.
+
 Deferred explicitly by the user on 2026-09-28. Do not turn voice feedback or a
 pit reminder into actual game input until this stage is implemented and tested.
 

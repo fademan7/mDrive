@@ -28,11 +28,16 @@ internal static class Wendy056Tests
         var f = new Fixture(); var d = f.Packets[10];
         d[29 + 28] = 25; d[29 + 31] = 32; d[29 + 18] = 35; d[29 + 34] = 1; d[29 + 38] = 60;
         f.Feed(0);
-        var text = f.Wendy.Answer("any damage", 1, f.Race, 0).Text;
+        var text = f.Wendy.Answer("report all damage", 1, f.Race, 0).Text;
         foreach (var part in new[] { "Left front wing damage is 25", "Floor damage is 32", "Front left tyre damage is 35", "DRS fault", "MGU H wear is 60", "Consider boxing" }) Check(text.Contains(part), part);
         Check(!text.Contains("panel"), "panel referral remains");
         Check(f.Wendy.Answer("do i need pit in", 1, f.Race, 0).Text.Contains("front wing change"), "damage advice");
         Check(f.Wendy.Answer("front wing damage", 1, f.Race, 0).Text.Contains("25 percent"), "targeted damage");
+        Check(!f.Wendy.Answer("front wing demage", 1, f.Race, 0).Text.Contains("Floor"), "target only requested component");
+        Check(f.Wendy.Answer("wing damage", 1, f.Race, 0).Text.Contains("Front wing or rear wing"), "ambiguous component clarification");
+        Check(f.Wendy.Answer("any damage", 1, f.Race, 0).Text.Length < text.Length, "brief default damage");
+        foreach (var question in new[] { "Do I need a pit stop?", "Should I pit because of front wing damage?", "Is a pit stop necessary with these tyres?" })
+            Check(f.Wendy.Answer(question, 1, f.Race, 0).Text.Contains("front wing change"), question);
         Check(f.Wendy.Answer("any damage", 1, f.Race, 4000).Text.Contains("unavailable"), "stale damage");
         Check(WendyLanguage.Fallback("OK, box box").Intent == DriverIntent.PLAN_PIT, "polite plan");
         Check(WendyLanguage.Fallback("OK, don't box").Intent == DriverIntent.CANCEL_PIT, "negative plan");

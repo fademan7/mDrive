@@ -18,20 +18,30 @@ catch (Exception ex)
     Console.Error.WriteLine("Close any running receiver and try again.");
     exitCode = 1;
 }
-if (interactive && exitCode != 0 && !Console.IsInputRedirected)
-{
-    Console.WriteLine("Press Enter to close after reviewing the error.");
-    Console.ReadLine();
-}
+if ((interactive || args.Contains("--qr")) && exitCode != 0) MessageBox.Show("mDrive could not start. Close other receivers and check the ViGEm driver/network. See diagnostics for details.","mDrive");
 return exitCode;
 
 static async Task<int> RunAsync(string[] args, bool interactive)
 {
+if(args.Length==2 && args[0]=="--vosk-worker")return VoskSpeechWorker.Run(args[1]);
+if(args.Length==2 && args[0]=="--speech-benchmark")return VoskSpeechBenchmark.Run(args[1]);
+if(args.Length==2 && args[0]=="--speech-stream-test")return VoskSpeechBenchmark.Stream(args[1]);
+if(args.Contains("--voice-probe")) {
+    using var synth=new System.Speech.Synthesis.SpeechSynthesizer();
+    Console.WriteLine("Offline English model: "+(File.Exists(Path.Combine(VoskSpeechWorker.ModelPath,"am","final.mdl"))?"installed":"missing"));
+    Console.WriteLine("English output voices: "+synth.GetInstalledVoices().Count(v=>v.Enabled&&v.VoiceInfo.Culture.TwoLetterISOLanguageName=="en"));
+    return 0;
+}
+if (args.Any(a => a.StartsWith("--ocr-", StringComparison.OrdinalIgnoreCase))) {
+    Console.Error.WriteLine("OCR was removed. Use F1 game radio; LB pauses Wendy."); return 3;
+}
 if (args.Contains("--usb") || args.Contains("--usb-test")) {
     Console.Error.WriteLine("USB mode was removed. Start mDrive normally for Wi-Fi pairing."); return 3;
 }
 var port = int.TryParse(GetOption(args, "--port"), out var p) ? p : 26760;
 var backend = GetOption(args, "--backend") ?? "vigem";
+// Installer guard only. No controller lock or change to session admission.
+using var installGuard=backend=="vigem"?new Mutex(false,"Local\\mDrive.Receiver"):null;
 var monitor = interactive || args.Contains("--monitor") || args.Contains("--qr");
 var session = ulong.TryParse(GetOption(args, "--session-hex"), System.Globalization.NumberStyles.HexNumber, null, out var configuredSession)
     ? configuredSession : RandomNonZeroUInt64();
@@ -73,12 +83,14 @@ Console.WriteLine("Hold the wheel level and release controls to start. Brief pro
 Console.WriteLine( "If the app was closed, restart receiver and scan its new QR in Options.");
 if (bindAddress.Equals(IPAddress.Loopback)) Console.WriteLine("No LAN address. Connect Wi-Fi and restart receiver.");
 using var stop = new CancellationTokenSource();
+using var pcVoice=new WindowsWendyVoice();
 using var wendy = new WendyService(bindAddress, key,
     int.TryParse(GetOption(args, "--engineer-port"), out var ep) ? ep : 26762,
-    int.TryParse(GetOption(args, "--telemetry-port"), out var tp) ? tp : 20777);
+    int.TryParse(GetOption(args, "--telemetry-port"), out var tp) ? tp : 20777,pcVoice);
+var audio=WendyAudioPreferences.Load();wendy.ConfigureAudio(audio.Input,audio.Output,audio.Volume,audio.Voice);
 if (args.Contains("--engineer")) wendy.SetEnabled(true);
 using var pairingWindow = interactive || args.Contains("--qr")
-    ? new PairingWindow(PairingPayload.Create(bindAddress, port, session, key), $"{bindAddress}:{port}", () => { if (!stop.IsCancellationRequested) stop.Cancel(); }, wendy) : null;
+    ? new PairingWindow(PairingPayload.Create(bindAddress, port, session, key), $"{bindAddress}:{port}", () => { if (!stop.IsCancellationRequested) stop.Cancel(); }, wendy,args.Contains("--audio-check")) : null;
 if (runSeconds > 0) stop.CancelAfter(TimeSpan.FromSeconds(runSeconds));
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
 var diagnosticDirectory = GetOption(args, "--diagnostics-dir") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "mDrive", "diagnostics", "controller");
@@ -120,6 +132,7 @@ var receive = CriticalLoop.Run("mDrive controller receive", () =>
                 if ((phone is null || !gate.GetDiagnostics(NowMs()).HasRecentInput) && gate.AcceptInitialHello(result.Buffer, reconnect: phone != null))
                 {
                     phone = result.RemoteEndPoint;
+                    wendy.ControllerReconnected();
                     Console.WriteLine("Wi-Fi authenticated · waiting for neutral");
                 }
                 continue;
@@ -127,7 +140,8 @@ var receive = CriticalLoop.Run("mDrive controller receive", () =>
             if (kind is not (PacketKind.Control or PacketKind.ControlLook) || phone is null || !result.RemoteEndPoint.Equals(phone)) {
                 flight.Record(new(ControlEvent.Reject, Accepted: false, Rejection: PacketRejection.Peer)); continue;
             }
-            gate.Ingest(result.Buffer, NowMs());
+            if(gate.Ingest(result.Buffer, NowMs()))
+                wendy.ControllerRadio((System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(result.Buffer.AsSpan(Pwr1Codec.HeaderSize+12)) & 0x0100)!=0);
         }
         catch (ProtocolException ex) { Interlocked.Increment(ref rejectedPackets); flight.Record(new(ControlEvent.Reject, Accepted: false, Rejection: SafetyGate.Classify(ex))); }
     }
@@ -144,6 +158,8 @@ var watchdog = CriticalLoop.Start("mDrive safety watchdog", 4, stop.Token, () =>
 
 var rumbleActive = false;
 var lastHapticMs = double.NegativeInfinity;
+long hapticPackets = 0;
+byte transmittedRumble = 0;
     // More frequent ACK challenges tolerate isolated lost Wi-Fi replies without
     // increasing the 100 ms freshness window or the 150 ms safety timeout.
 var status = CriticalLoop.Start("mDrive ACK and haptics", 20, stop.Token, () =>
@@ -158,7 +174,7 @@ var status = CriticalLoop.Start("mDrive ACK and haptics", 20, stop.Token, () =>
         flight.Record(new(ControlEvent.StatusSend, Sequence: seq, Ack: header.AckSequence, Armed: health.Armed, Release: frame.Reason));
         try { socket.Send(Pwr1Codec.EncodeStatus(frame, key), phone, stop.Token); }
         catch (SocketException) when (!stop.IsCancellationRequested) { return; }
-        if (NowMs() - lastHapticMs < 50) return;
+        if (NowMs() - lastHapticMs < 20) return;
         lastHapticMs = NowMs();
         var level = output is ViGEmGamepadOutput pad ? pad.ReadRumbleLevel(gate.Armed) : (byte)0;
         if (level != 0 || rumbleActive)
@@ -168,7 +184,7 @@ var status = CriticalLoop.Start("mDrive ACK and haptics", 20, stop.Token, () =>
             var haptic = new HapticFrame(hapticHeader, level == 0 ? HapticEvent.Stop : HapticEvent.GamepadRumble,
                 level, level == 0 ? (ushort)0 : (ushort)100);
             gate.NoteServerSend(seq, NowMs());
-            try { socket.Send(Pwr1Codec.EncodeHaptic(haptic, key), phone, stop.Token); }
+            try { socket.Send(Pwr1Codec.EncodeHaptic(haptic, key), phone, stop.Token); Interlocked.Increment(ref hapticPackets); transmittedRumble = level; }
             catch (SocketException) when (!stop.IsCancellationRequested) { }
         }
         rumbleActive = level != 0;
@@ -181,10 +197,6 @@ var display = Task.Run(async () =>
     using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(250));
     while (await timer.WaitForNextTickAsync(stop.Token))
     {
-        if (!Console.IsInputRedirected && Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q)
-        {
-            stop.Cancel(); break;
-        }
         var diagnostic = gate.GetDiagnostics(NowMs());
         var state = phone is null ? "Waiting for connection" : !diagnostic.HasRecentInput ? "Input stream lost · controls released" : diagnostic.Armed ? "Driving active" : $"Output blocked · {ExplainRelease(diagnostic.Reason)}";
         if (worker.Faulted) state = $"Gamepad output fault · retrying neutral ({worker.LastError})";
@@ -194,6 +206,7 @@ var display = Task.Run(async () =>
         var received = diagnostic.HasRecentInput ? Values(diagnostic.Received) : "No data (check connection / PC mode)";
         var line = $"{state}\nPhone input: {received}\nGame output: {Values(worker.Faulted ? Controls.Neutral : diagnostic.Output)}";
         line += $"\nStops {diagnostic.ReleaseCount} / {diagnostic.LastRelease} · Pad errors {worker.FailureCount} · ACK rejects {diagnostic.RejectedChallenges}";
+        if (output is ViGEmGamepadOutput rumblePad) line += $"\nRumble: Xbox events {rumblePad.FeedbackCount} → phone packets {Interlocked.Read(ref hapticPackets)} · level {transmittedRumble}";
         line += $"\nRX max {gate.MaxReceiveGapMs:F0} ms · Write max {worker.MaxWriteMs:F1} ms · Trace {(flight.LastFile == null ? "armed" : "saved")} / dropped {flight.Dropped} / save errors {flight.SaveFailures}";
         if (phone is null) line += $"\nPackets received {Interlocked.Read(ref receivedPackets)} · Authentication rejected {Interlocked.Read(ref rejectedPackets)} (check new QR / connection mode)";
         pairingWindow?.Update(line);

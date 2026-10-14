@@ -33,6 +33,31 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
     private var flag = "UNKNOWN"
     private var state = "IDLE"
     private val auto = AlwaysListenPolicy()
+    private var inputAndroid = false
+    private var outputAndroid = false
+    private var outputVolume = 100
+    private var audioRevision = -1L
+    private var pcSpeaking = false
+    private var remoteVoice = "IDLE"
+    private val gameRadio = GameRadioGate()
+    private val radioBlocked get() = gameRadio.blocked(android.os.SystemClock.elapsedRealtime())
+    private val resumeRadio = Runnable {
+        if (radioBlocked) return@Runnable
+        show("IDLE", "Wendy ready.")
+        scheduleListening(0)
+    }
+    fun gameRadioButton(down: Boolean) {
+        gameRadio.edge(down, android.os.SystemClock.elapsedRealtime())
+        main.removeCallbacks(resumeRadio)
+        if (down) {
+            link?.gameRadio = true; link?.discardPending(); cancelSpeech()
+            // Destroy the recognizer to release the microphone, not just stop results.
+            disposeRecognizer()
+            show("IDLE", "Game radio has priority. Wendy microphone paused.")
+        } else if (radioBlocked) {
+            main.postDelayed(resumeRadio, gameRadio.remaining(android.os.SystemClock.elapsedRealtime()))
+        }
+    }
     private var speechStarted = false
     private var recognitionTicket = 0
     var recognitionStarts = 0; private set
@@ -46,25 +71,26 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
     private var supportProbe: SpeechRecognizer? = null
     val alwaysListening get() = auto.enabled
     var onDeviceOnly = false; private set
-    val voiceState get() = state
+    val voiceState get() = if (radioBlocked) "GAME RADIO" else if(pcSpeaking) "SPEAKING" else if(!inputAndroid && state != "SPEAKING" && state != "PROCESSING") remoteVoice else state
     val health get() = "Engineer link: ${if (connected) "connected" else "waiting"} · mic starts $recognitionStarts / ready $recognitionReady / errors $recognitionErrors\nOn-device English: ${when(deviceEnglishReady) { true -> "installed"; false -> "not installed"; null -> "not confirmed" }}\nLast fault: $lastFault"
-    val providerDescription get() = if (onDeviceOnly) "On-device English" else "System English (same as PTT; may use internet)"
+    val providerDescription get() = "Input: ${if(inputAndroid) "Android" else "PC"} · Output: ${if(outputAndroid) "Android" else "PC"} · Volume $outputVolume%"
     private val listenAgain = Runnable {
         retryAt = Long.MAX_VALUE
-        if (auto.canStart(active, connected, enabled, state)) startListening(true)
+        if (inputAndroid && !pcSpeaking && !radioBlocked && auto.canStart(active, connected, enabled, state)) startListening(true)
     }
     // Recover a cancelled/missed restart after asynchronous TTS/provider callbacks.
     // Never override an intentional backoff, fatal error, or active utterance.
     private val supervision = object : Runnable {
         override fun run() {
-            if (auto.canStart(active, connected, enabled, state) && retryAt == Long.MAX_VALUE) scheduleListening()
+            if (inputAndroid && !pcSpeaking && !radioBlocked && auto.canStart(active, connected, enabled, state) && retryAt == Long.MAX_VALUE) scheduleListening()
             main.postDelayed(this, 1000)
         }
     }
     init { main.postDelayed(supervision, 1000) }
     var enabled = false; private set
-    var lastMessage = "Enable F1 Engineer on the receiver, then enable Wendy here."; private set
+    var lastMessage = "Enable Wendy and select microphone / voice output in the PC window."; private set
     var diagnostics = "Heard: —\nIntent: —\nResponse: —"; private set
+    var summary = ""; private set
     private val timeout = Runnable {
         val quiet = alwaysListening && state == "LISTENING" && !speechStarted
         cancelSpeech()
@@ -81,7 +107,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
         if (providerChanged) disposeRecognizer()
         onDeviceOnly = offline
         if (value && !enabled) enable(true)
-        if (value && activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+        if (value && inputAndroid && activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), AUDIO_REQUEST)
         show("IDLE", if (value) "Hands-free ON: $providerDescription. Headset recommended." else "Push to talk mode.")
         scheduleListening()
@@ -96,7 +122,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
             fun finish(ready: Boolean?) {
                 if (supportProbe !== probe) return
                 deviceEnglishReady = ready; supportProbe = null; probe.destroy()
-                update(state, flag, lastMessage)
+                update(voiceState, flag, lastMessage)
             }
             probe.checkRecognitionSupport(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
@@ -111,7 +137,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
     private fun scheduleListening(delay: Long = 1200) {
         main.removeCallbacks(listenAgain)
         retryAt = Long.MAX_VALUE
-        if (auto.canStart(active, connected, enabled, state)) {
+        if (inputAndroid && !pcSpeaking && !radioBlocked && auto.canStart(active, connected, enabled, state)) {
             retryAt = android.os.SystemClock.elapsedRealtime() + delay
             main.postDelayed(listenAgain, delay)
         }
@@ -133,6 +159,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
 
     fun connection(value: PairingDetails?) {
         if (details == value) return
+        if(value!=null) {enabled=true;auto.enabled=true}
         details = value; restartLink()
     }
     fun enable(value: Boolean) { if (enabled == value) return; enabled = value; auto.reset(); restartLink() }
@@ -143,10 +170,10 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
         // engineer connection. Controller networking is never owned here.
         if (!value) { cancelSpeech(); link?.state = "ERROR"; link?.allowAlerts = false }
         else if (link == null) restartLink()
-        else { link?.state = state; scheduleListening() }
+        else { link?.state = if (radioBlocked) "ERROR" else state; scheduleListening() }
     }
     private fun restartLink() {
-        generation++; link?.close(); link = null; connected = false; flag = "UNKNOWN"
+        generation++; link?.close(); link = null; connected = false; flag = "UNKNOWN"; summary = ""
         cancelSpeech()
         if (!enabled || !active) {
             disposeRecognizer(); runCatching { tts?.shutdown() }; tts = null; ttsReady = false
@@ -159,6 +186,16 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
             if (generation != current || !enabled) return@post
             val wasConnected = connected
             connected = status.connected; flag = status.flag
+            if(connected) {
+                val routeChanged=audioRevision!=status.audioRevision || inputAndroid!=(status.audioInput=="Android") || outputAndroid!=(status.audioOutput=="Android")
+                if(routeChanged) {cancelSpeech();disposeRecognizer();link?.discardPending()}
+                inputAndroid=status.audioInput=="Android";outputAndroid=status.audioOutput=="Android";outputVolume=status.volume
+                audioRevision=status.audioRevision;link?.audioRevision=audioRevision;remoteVoice=status.voiceState
+                if(status.pcSpeaking && !pcSpeaking) cancelSpeech()
+                val wasSpeaking=pcSpeaking;pcSpeaking=status.pcSpeaking
+                if(routeChanged || wasSpeaking && !pcSpeaking) {show("IDLE");scheduleListening()}
+            }
+            summary = if(status.connected && status.telemetry) status.summary else ""
             if (!connected) {
                 cancelSpeech(); lastFault = "Engineer TCP: ${status.fault}"
                 show("ERROR", "Engineer link reconnecting (${status.fault}). Check Receiver Engineer ON and the current PC address. Controller link is separate.")
@@ -166,18 +203,19 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
             else {
                 if (status.heard.isNotBlank()) diagnostics = "Heard: ${status.heard}\nIntent: ${status.intent}\nSource: ${status.source}\nResponse: ${status.text}"
                 if (!wasConnected) { linkConnections++; show("IDLE", if (status.telemetry) "Wendy ready." else "Telemetry waiting. Use F1 UDP format 2025."); scheduleListening() }
-                else update(state, flag, lastMessage)
-                if (active && status.text.isNotBlank() && (if (status.kind == "alert") state == "IDLE" || (alwaysListening && state == "LISTENING" && !speechStarted) else state == "PROCESSING")) {
+                else update(voiceState, flag, lastMessage)
+                if (active && !radioBlocked && status.text.isNotBlank() && (if(!inputAndroid) true else if (status.kind == "alert") state == "IDLE" || (alwaysListening && state == "LISTENING" && !speechStarted) else state == "PROCESSING")) {
                     if (state == "LISTENING") { stopRecognition(); show("IDLE") }
-                    speak(status.text)
+                    if(outputAndroid) speak(status.text) else {show("IDLE",status.text);scheduleListening()}
                 }
             }
         } }
     }
     private fun show(value: String, message: String = lastMessage) {
-        state = value; lastMessage = message; link?.state = if (active) value else "ERROR"
-        link?.allowAlerts = alwaysListening && value == "LISTENING" && !speechStarted
-        update(state, flag, lastMessage)
+        state = value; lastMessage = message; link?.state = if (active && !radioBlocked) value else "ERROR"
+        link?.gameRadio = radioBlocked
+        link?.allowAlerts = !radioBlocked && alwaysListening && value == "LISTENING" && !speechStarted
+        update(voiceState, flag, lastMessage)
         android.util.Log.d("WendyVoice", "state=$value auto=$alwaysListening provider=${if (onDeviceOnly) "device" else "system"}")
     }
     fun press() {
@@ -185,6 +223,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
         startListening(false)
     }
     private fun startListening(automatic: Boolean) {
+        if (!inputAndroid || pcSpeaking || radioBlocked) return
         if (!enabled || !active || !connected) { show("ERROR", "Enable Wendy and PC F1 Engineer, then try again."); return }
         if (state == "LISTENING" || state == "PROCESSING") return
         if (activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -197,7 +236,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
         cancelSpeech()
         try {
             val ticket = ++recognitionTicket
-            fun valid() = ticket == recognitionTicket && active && enabled && connected
+            fun valid() = ticket == recognitionTicket && active && enabled && connected && inputAndroid && !pcSpeaking && !radioBlocked
             if (recognizer == null) {
                 recognizer = if (alwaysListening && onDeviceOnly) SpeechRecognizer.createOnDeviceSpeechRecognizer(activity) else SpeechRecognizer.createSpeechRecognizer(activity)
             }
@@ -271,6 +310,7 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
         catch (_: Exception) { speechFailure(text, "Speech service unavailable.") }
     }
     private fun speakSafely(text: String) {
+        if (!outputAndroid || radioBlocked) return
         main.removeCallbacks(timeout)
         main.removeCallbacks(listenAgain)
         if (state == "LISTENING" || !active || !enabled) return
@@ -305,7 +345,8 @@ internal class WendyVoice(private val activity: Activity, private val update: (S
         })
         show("SPEAKING", text)
         main.postDelayed(timeout, 20000)
-        if (runCatching { tts!!.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) }.getOrDefault(TextToSpeech.ERROR) == TextToSpeech.ERROR) speechFailure(text, "TTS failed.")
+        val audio=Bundle().apply {putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME,outputVolume/100f)}
+        if (runCatching { tts!!.speak(text, TextToSpeech.QUEUE_FLUSH, audio, id) }.getOrDefault(TextToSpeech.ERROR) == TextToSpeech.ERROR) speechFailure(text, "TTS failed.")
     }
     override fun close() { enabled = false; active = false; restartLink(); runCatching { supportProbe?.destroy() }; supportProbe = null; main.removeCallbacksAndMessages(null) }
 }

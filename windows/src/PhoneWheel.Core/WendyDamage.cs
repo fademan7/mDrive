@@ -29,6 +29,11 @@ public static class WendyDamage
         // nonzero monitored component; proactive alerts use a shorter subset.
         return string.Join(" ", found.Select(f => f.Text)) + " " + PitGuidance(r);
     }
+    public static string Brief(F1RaceState r) {
+        var found = Findings(r);
+        return found.Length == 0 ? "No damage or component wear reported." :
+            string.Join(" ", found.Take(2).Select(f => f.Text));
+    }
     public static string PitGuidance(F1RaceState r) {
         if (r.ComponentDamage[16] != 0 || r.ComponentDamage[17] != 0)
             return "Terminal engine fault reported. A normal pit stop may not resolve it.";

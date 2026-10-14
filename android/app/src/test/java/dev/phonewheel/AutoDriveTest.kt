@@ -13,7 +13,7 @@ class AutoDriveTest {
             assertEquals(AutoDriveAction.ARM, tick(a, 700)); tick(a, 750, active = true)
             val result = a.tick(800, q, fault != "sensor", fault != "focus", true,
                 fault != "connection", false, false, fault != "hard")
-            assertEquals(if (fault == "none") AutoDriveAction.NONE else AutoDriveAction.RELEASE, result)
+            assertEquals(if (fault == "none" || fault == "connection") AutoDriveAction.NONE else AutoDriveAction.RELEASE, result)
             if (fault == "none") assertEquals(AutoDriveAction.NONE, tick(a, 850, active = true, touch = true, neutral = false))
         }
     }
@@ -61,7 +61,7 @@ class AutoDriveTest {
     }
 
     @Test fun faultsReleaseAndNetworkFaultsPrepareNeutralRecovery() {
-        for (fault in listOf("sensor", "connection", "focus", "host")) {
+        for (fault in listOf("sensor", "focus", "host")) {
             val a = AutoDrive(); a.request(false)
             for (t in 0L..650L step 50) tick(a, t)
             assertEquals(AutoDriveAction.ARM, tick(a, 700))
@@ -73,14 +73,15 @@ class AutoDriveTest {
         }
     }
 
-    @Test fun networkRecoveryNeverResumesHeldInputsOrRecenters() {
+    @Test fun networkRecoveryKeepsIntentWithoutRecenteringOrNeutralDwell() {
         val a = AutoDrive(); a.request(false)
         for (t in 0L..650L step 50) tick(a, t)
         assertEquals(AutoDriveAction.ARM, tick(a, 700)); tick(a, 750, active = true)
-        assertEquals(AutoDriveAction.RELEASE, tick(a, 800, connected = false))
-        for (t in 850L..1850L step 50) assertEquals(AutoDriveAction.NONE, tick(a, t, touch = true, neutral = false))
-        for (t in 1900L..2550L step 50) assertEquals(AutoDriveAction.NONE, tick(a, t))
-        assertEquals(AutoDriveAction.ARM, tick(a, 2600))
+        assertEquals(AutoDriveAction.NONE, tick(a, 800, connected = false))
+        for (t in 850L..5000L step 50) assertEquals(AutoDriveAction.NONE, tick(a, t, connected = false, touch = true, neutral = false))
+        assertEquals(AutoDriveAction.NONE, a.tick(5050, q, true, true, true, true, false, false, true))
+        assertEquals(AutoDriveAction.NONE, tick(a, 5100, active = true, touch = true, neutral = false))
+        assertEquals(AutoDriveAction.RELEASE, tick(a, 5150, fresh = false, touch = true, neutral = false))
     }
 
     @Test fun rejectedRequestLowersArmBeforeRetryingNeutralDwell() {

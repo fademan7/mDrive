@@ -15,6 +15,9 @@ public sealed class ViGEmGamepadOutput : IGamepadOutput
     private readonly long _rumbleClock = Stopwatch.GetTimestamp();
     private double RumbleNow => Stopwatch.GetElapsedTime(_rumbleClock).TotalMilliseconds;
     public byte ReadRumbleLevel(bool armed) => _rumble.ReadLevel(RumbleNow, armed);
+    private long _feedbackCount;
+    public long FeedbackCount => Interlocked.Read(ref _feedbackCount);
+    public int UserIndex => _controller.UserIndex;
 
     public ViGEmGamepadOutput()
     {
@@ -22,7 +25,10 @@ public sealed class ViGEmGamepadOutput : IGamepadOutput
         _controller = _client.CreateXbox360Controller();
         _controller.AutoSubmitReport = false;
         _controller.ResetReport();
-        _controller.FeedbackReceived += (_, feedback) => _rumble.Update(feedback.LargeMotor, feedback.SmallMotor, RumbleNow);
+        _controller.FeedbackReceived += (_, feedback) => {
+            _rumble.Update(feedback.LargeMotor, feedback.SmallMotor, RumbleNow);
+            Interlocked.Increment(ref _feedbackCount);
+        };
         _controller.Connect();
         // On the first tested PC, an unchanged all-zero report did not advance
         // XInput's packet counter and the just-enumerated slot briefly exposed

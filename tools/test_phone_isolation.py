@@ -18,9 +18,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--host", required=True)
 parser.add_argument("--serial", required=True, help="Authorized test phone serial from adb devices")
 parser.add_argument("--microphone", action="store_true", help="Explicitly authorized live microphone start/stop test")
+parser.add_argument("--receiver", default="release/receiver/PhoneWheel.Receiver.exe")
 args = parser.parse_args()
 adb = str(root / ".tools/android-sdk/platform-tools/adb.exe")
-receiver = str(root / "release/receiver/PhoneWheel.Receiver.exe")
+receiver = str(root / args.receiver)
 key = base64.b64encode(secrets.token_bytes(32)).decode()
 session = f"{secrets.randbits(64) or 1:X}"
 process = subprocess.Popen([receiver, "--wifi", "--monitor", "--bind", args.host, "--port", "26760", "--backend", "null",

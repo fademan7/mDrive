@@ -138,11 +138,12 @@ class CoreTest {
     @Test fun defaultSteeringIsLinearWithoutExtraDeadzoneOrFilter() {
         val e = SteeringEstimator()
         e.calibrate(Quaternion(1.0, 0.0, 0.0, 0.0))
-        listOf(0.1, 30.0, 45.0, 90.0, 135.0, 179.0, 180.0, 90.0, 0.0,
-            -45.0, -90.0, -135.0, -180.0, -90.0, 0.0).forEachIndexed { index, angle ->
+        listOf(0.0, 0.1, 30.0, 45.0, 60.0, 90.0, 120.0, 135.0, 179.0, 180.0, 90.0, 0.0,
+            -30.0, -45.0, -60.0, -90.0, -120.0, -135.0, -180.0, -90.0, 0.0).forEachIndexed { index, angle ->
             val h = Math.toRadians(-angle) / 2
             val value = e.update(Quaternion(cos(h), 0.0, 0.0, sin(h)), (index + 1) * 5_000_000L)
-            assertEquals("angle=$angle", (angle / 180.0).toFloat(), value, .0001f)
+            assertEquals("angle=$angle", (angle / 120.0).coerceIn(-1.0, 1.0).toFloat(), value, .0001f)
+            assertEquals("180-degree game reference", (angle * 1.5).coerceIn(-180.0, 180.0), value * 180.0, .001)
         }
     }
 
@@ -153,7 +154,7 @@ class CoreTest {
         listOf(0.0, 45.0, 90.0, 135.0, 180.0, 135.0, 90.0, 45.0, 0.0, -45.0).forEachIndexed { index, angle ->
             val h = Math.toRadians(-angle) / 2
             val pose = center * Quaternion(cos(h), 0.0, 0.0, sin(h))
-            assertEquals((angle / 180).toFloat(), e.update(pose, (index + 1) * 5_000_000L), .0001f)
+            assertEquals((angle / 120).coerceIn(-1.0, 1.0).toFloat(), e.update(pose, (index + 1) * 5_000_000L), .0001f)
         }
     }
 

@@ -80,6 +80,8 @@ public sealed class F1RaceState
     public double? LeaderGap { get; private set; }
     public int SafetyCar { get; private set; }
     public bool Paused { get; private set; }
+    public bool NetworkGame { get; private set; }
+    public int MfdPanel { get; private set; } = 255;
     public bool Spectating { get; private set; }
     public int Position { get; private set; }
     public int Lap { get; private set; }
@@ -139,6 +141,7 @@ public sealed class F1RaceState
         switch (id)
         {
             case 1:
+                NetworkGame = p[125] != 0;
                 Weather = p[0]; Paused = p[14] != 0; Spectating = p[15] != 0; SafetyCar = p[124]; SessionMs = now;
                 TotalLaps = p[3]; TrackLength = U16(p, 4); TrackId = unchecked((sbyte)p[7]);
                 SessionType = p[6]; Formula = p[8]; SessionSecondsLeft = U16(p, 9); PitSpeedLimit = p[13];
@@ -181,6 +184,7 @@ public sealed class F1RaceState
                 SetupMs = now;
                 break;
             case 6:
+                MfdPanel = p[1320];
                 var telemetry = p.Slice(player * 60, 60);
                 SpeedKph = U16(telemetry, 0); Throttle = F(telemetry, 2); Steer = F(telemetry, 6); Brake = F(telemetry, 10);
                 Gear = unchecked((sbyte)telemetry[15]); Rpm = U16(telemetry, 16); DrsOpen = telemetry[18] != 0;
@@ -231,6 +235,7 @@ public sealed class F1RaceState
         Ahead = Behind = null; AheadCar = BehindCar = -1; FiaFlag = -1; SafetyCar = 0;
         RaceStartMs = double.NegativeInfinity;
         Forecast = []; LeaderGap = null;
+        MfdPanel = 255; NetworkGame = false;
     }
     private static bool Validate(ReadOnlySpan<byte> d, byte id, byte player)
     {

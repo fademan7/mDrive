@@ -19,7 +19,7 @@ static int Main(string[] args)
         ("authenticated reconnect releases and rejects replay", AuthenticatedReconnect),
         ("received preview versus safe output", DiagnosticPreview),
         ("haptic no queue and refresh", HapticTransitions),
-        ("game rumble expiry and disarm", RumbleTransitions),
+        ("XInput latched rumble, bounded short peaks and disarm", RumbleTransitions),
         ("F1 2025 synthetic layout", F1Layout),
         ("Wendy telemetry/query/alerts/freshness", WendyTests.Race),
         ("Wendy proactive event thresholds and cooldowns", WendyTests.Alerts),
@@ -39,7 +39,7 @@ static int Main(string[] args)
         ,("Wendy game weather forecast and same-lap leader gap", Wendy052Tests.ForecastAndLeader)
         ,("controller jitter, packet loss and isolated stale ACK", DropoutTests.JitterAndRejections)
         ,("controller loss and held throttle/steering/brake recovery", DropoutTests.LossAndHeldRecovery)
-        ,("controller bounded post-expiry proof recovery and hard-fault isolation", DropoutTests.ProvenFastRecovery)
+        ,("controller fresh post-expiry proof recovery and hard-fault isolation", DropoutTests.ProvenFastRecovery)
         ,("controller distinct READY, ACK and output failure transitions", DropoutTests.DistinctFaults)
         ,("controller flight recorder bounded RAM and triggered disk", DropoutTests.Recorder)
         ,("controller UDP independent of saturated shared pool", DropoutTests.ReceiveIsolation)
@@ -48,6 +48,16 @@ static int Main(string[] args)
         ,("Wendy known phrases bypass the CPU model", WendyNaturalLanguageTests.FastPath)
         ,("Wendy authenticated sentence conversation round trip", WendyServiceTests.Conversation)
         ,("Wendy spoken damage, pit guidance and quiet interval radio", Wendy056Tests.DamageAndRadio)
+        ,("Wendy verified direct shortcuts and cancellation", Wendy057Tests.Commands)
+        ,("Wendy clean-lap life ranges and bounded advisor", Wendy057Tests.LifeAndAdvisor)
+        ,("Wendy approval session/reconnect/expiry/setup/condition fences", Wendy057Tests.ApprovalInvalidation)
+        ,("Wendy practice menu language and bounded profiles", WendyMenuTests.Language)
+        ,("Wendy practice menu cancellation, expiry and honest results", WendyMenuTests.Execution)
+        ,("Wendy four audio routes, volume, stale routing and LB priority", WendyAudioTests.Routes)
+        ,("Wendy bounded PCM, stale epoch, overflow and confidence", WendySpeechTests.Run)
+        ,("Wendy off-track chat, radio and quiet unavailable telemetry", Wendy0514Tests.Conversation)
+        ,("Wendy varied fresh briefings and race/chat transitions", Wendy0514Tests.Briefings)
+        ,("recreated phone monotonic sequence preserves replay rejection", RecreatedPhoneSequence)
     };
     var failures = 0;
     foreach (var test in tests)
@@ -60,6 +70,16 @@ static int Main(string[] args)
 }
 
 static readonly byte[] Key = Enumerable.Range(0, 32).Select(x => (byte)x).ToArray();
+static void RecreatedPhoneSequence()
+{
+    var gate=new SafetyGate(Session,Key);
+    byte[] Hello(uint sequence)=>Pwr1Codec.EncodeHello(new(new(PacketKind.Hello,Session,sequence,0,0)),Key);
+    True(gate.AcceptInitialHello(Hello(1000000)));
+    False(gate.AcceptInitialHello(Hello(1),true)); // Old client reset cannot bypass replay checks.
+    True(gate.AcceptInitialHello(Hello(1001000),true)); // Recreated boot-clock client.
+    False(gate.AcceptInitialHello(Hello(1000000),true));
+    False(gate.Armed);Equal(Controls.Neutral,gate.Output);
+}
 static void PairingUri()
 {
     Equal("phonewheel://pair?v=1&host=192.168.1.25&port=26760&session=0102030405060708&key=AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
@@ -214,10 +234,15 @@ static void RumbleTransitions()
     r.Update(85, 0, 0); Equal((byte)1, r.ReadLevel(0, true));
     r.Update(0, 170, 1); Equal((byte)2, r.ReadLevel(1, true));
     r.Update(255, 0, 2); Equal((byte)3, r.ReadLevel(501, true));
-    Equal((byte)0, r.ReadLevel(502, true));
+    Equal((byte)3, r.ReadLevel(502, true));
+    Equal((byte)3, r.ReadLevel(5000, true)); // No changed-state callback required.
     r.Update(255, 0, 503); Equal((byte)0, r.ReadLevel(504, false));
     Equal((byte)0, r.ReadLevel(505, true));
-    r.Update(255, 0, 506); r.Update(0, 0, 507); Equal((byte)0, r.ReadLevel(507, true));
+    r.Update(255, 0, 506); r.Update(0, 0, 507); Equal((byte)3, r.ReadLevel(507, true));
+    Equal((byte)0, r.ReadLevel(508, true));
+    r.Update(255, 0, 600); r.Update(0, 0, 605); Equal((byte)0, r.ReadLevel(701, true));
+    r.Update(255, 0, 800); Equal((byte)3, r.ReadLevel(801, true));
+    r.Update(0, 0, 802); Equal((byte)0, r.ReadLevel(803, true));
     var haptic = new HapticFrame(Header(PacketKind.Haptic), HapticEvent.GamepadRumble, 3, 100);
     Equal(haptic, Pwr1Codec.DecodeHaptic(Pwr1Codec.EncodeHaptic(haptic, Key), Key, Session));
 }

@@ -78,7 +78,7 @@ OFF에는 모델/telemetry/network worker를 시작하지 않습니다. 최초 �
 - 기본 실행 경로 `release/receiver/PhoneWheel.Receiver.exe`를 검증한 새 EXE로 교체했고, `release/receiver-040` 산출물과 SHA256 일치를 확인했습니다.
 - 이전 EXE는 `release/backups/PhoneWheel.Receiver-before-040.exe`에 보존했습니다.
 - 숨겨진 창 모드로 떠 있던 리시버를 승인된 재시작 범위에서 종료하고 일반 창 모드로 다시 실행했습니다. Windows UI 접근성 검사에서 **PhoneWheel · Wi-Fi QR 연결**, **F1 Engineer ON**, **Telemetry Waiting**, **Wendy IDLE**, **Flag UNKNOWN**, **폰 연결 대기**를 확인했습니다. QR 스캔/실제 게임 주행은 아직 미실행입니다.
-- PC DHCP 주소가 바뀌었으므로 현재 리시버 창의 새 QR로 연결해야 합니다. 2026-09-18 확인 주소는 172.30.1.3:26760입니다. 주소를 영구 고정값으로 사용하지 마세요.
+- PC DHCP 주소가 바뀌었으므로 현재 리시버 창의 새 QR로 연결해야 합니다. 2026-09-18 확인 주소는 [LAN-IP redacted]:26760입니다. 주소를 영구 고정값으로 사용하지 마세요.
 - UI 상세 버튼 자동 클릭은 도구의 `coordinate input geometry is unavailable`로 확인하지 못했습니다. 메인 QR 창의 존재/상태 확인과 코드/빌드 테스트를 상세 창 클릭 시험으로 표현하지 않습니다.
 - 배포 ZIP: `release/mDrive-0.4.0-win-x64.zip`, 695,869,208 bytes. SHA256 `c9599f0d2a5a997b6ca5d85699489097598529342d33f8636690742ef7ffa807`.
 - 모델 평균 working set(30문장 관측 표본): 933.49 MiB. cold load를 제외한 단순 조회 평균 348ms. 부하·측정 범위는 위 제한을 따릅니다.

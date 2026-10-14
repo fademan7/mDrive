@@ -1,5 +1,12 @@
 # Controller dropout investigation — 0.5.4 candidate
 
+**0.5.15 supersedes the bounded recovery deadline below:** actual 2026-10-14
+incident analysis and held-pedal device results are in
+[WENDY_RECOVERY_0515.md](../artifacts/validation/WENDY_RECOVERY_0515.md).
+Network-only eligibility now survives outages/reconnect; output is still neutral
+at 150 ms and resume needs a fresh <=100 ms post-expiry challenge. Hard faults
+still revoke eligibility. See `PROTOCOL.md` for the current contract.
+
 **0.5.6 update:** actual incident evidence and the bounded post-expiry proof
 recovery change are documented in
 [CONTROLLER_WENDY_056.md](../artifacts/validation/CONTROLLER_WENDY_056.md).

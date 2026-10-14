@@ -35,7 +35,10 @@ class AutoDrive {
             return AutoDriveAction.NONE
         }
         if (stage == Stage.ACTIVE) {
-            if (!connected || (!hostActive && !hostRecovering)) { request(false); return AutoDriveAction.RELEASE }
+            // Missing ACKs do not revoke live driver intent. The PC neutralizes
+            // at 150ms and demands fresh round-trip proof before resuming.
+            // A received hard-fault status, sensor or focus loss still revokes it.
+            if (connected && !hostActive && !hostRecovering) { request(false); return AutoDriveAction.RELEASE }
             return AutoDriveAction.NONE
         }
         if (stage == Stage.REQUESTED) {

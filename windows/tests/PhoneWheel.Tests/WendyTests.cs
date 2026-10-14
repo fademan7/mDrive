@@ -36,8 +36,19 @@ internal static class WendyTests
             ["What's the weather?"] = "light rain", ["What flag is out?"] = "Yellow flag", ["What lap am I on?"] = "lap 5", ["What's my position?"] = "P 2"
         };
         foreach (var (query, result) in expected) Check(wendy.Answer(query, 1, race, 100).Text.Contains(result), query);
+        Check(wendy.Answer("Vehicle condition", 1, race, 100).Text.Contains("15 percent"), "radio vehicle condition is damage report");
+        var full = wendy.Answer("Full race update", 1, race, 100).Text;
+        Check(full.Contains("P 2, lap 5") && full.Contains("1.8") && full.Contains("Highest tyre wear 42") && full.Contains("Fuel 21.0"), "full radio update");
+        var pitInfo = wendy.Answer("Pit stop information", 1, race, 100).Text;
+        Check(pitInfo.Contains("Completed stops") && pitInfo.Contains("No reliable game pit window") && pitInfo.Contains("not available in telemetry"), "pit report without invented next tyre or crew ACK");
+        var pitRace = new F1RaceState(); var pitSession = (byte[])session.Clone(); pitSession[32] = 20;
+        pitSession[29 + 653] = 8; pitSession[29 + 654] = 10; pitSession[29 + 655] = 5;
+        Check(pitRace.Ingest(pitSession, 0) && pitRace.Ingest(lap, 0), "pit-window fixture");
+        var windowReport = new WendyEngineer().Answer("Tell me the pit stop information", 1, pitRace, 100).Text;
+        Check(windowReport.Contains("target lap 8, latest lap 10") && windowReport.Contains("Predicted rejoin P 5"), "read actual game pit window");
+        Check(wendy.Answer("Pit stop information", 1, race, 3001).Text.Contains("unavailable"), "pit report stale gate");
         Check(wendy.Alert(race, 100)?.Text == "Yellow flag.", "flag alert priority"); Check(wendy.Alert(race, 200) == null, "global cooldown");
-        Check(wendy.Answer("Set brake bias to 54", 1, race, 100).Kind == "unsupported", "no unsafe injection");
+        Check(wendy.Answer("Set brake bias to 54", 1, race, 100).Kind == "rejected", "no unsafe injection without verified shortcuts");
         Check(wendy.Answer("Set brake bias to 54 or 55", 1, race, 100).Kind == "rejected", "ambiguous number");
         Check(wendy.Answer("Box this lap", -1, race, 100).Kind == "rejected", "unknown confidence");
         Check(wendy.Answer("Box this lap", .99, race, 100).Text.Contains("cannot send"), "pit request not falsely confirmed");

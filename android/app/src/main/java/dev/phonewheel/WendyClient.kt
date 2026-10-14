@@ -7,7 +7,7 @@ import java.net.Socket
 import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONObject
 
-internal data class WendyStatus(val connected: Boolean = false, val telemetry: Boolean = false, val flag: String = "UNKNOWN", val text: String = "", val kind: String = "status", val heard: String = "", val intent: String = "", val source: String = "", val fault: String = "")
+internal data class WendyStatus(val connected: Boolean = false, val telemetry: Boolean = false, val flag: String = "UNKNOWN", val text: String = "", val kind: String = "status", val heard: String = "", val intent: String = "", val source: String = "", val fault: String = "", val summary: String = "", val commandState: String = "", val audioInput: String = "PC", val audioOutput: String = "PC", val volume: Int = 100, val audioRevision: Long = 0, val voiceState: String = "IDLE", val pcSpeaking: Boolean = false)
 internal data class VoiceRequest(val text: String, val confidence: Float)
 
 // One independent low-rate thread. No controller executor, locks, or queues.
@@ -16,12 +16,15 @@ internal class WendyClient(private val details: PairingDetails, private val onSt
     @Volatile private var socket: Socket? = null
     @Volatile var state = "IDLE"
     @Volatile var allowAlerts = false
+    @Volatile var gameRadio = false
+    @Volatile var audioRevision = -1L
     private val pending = AtomicReference<VoiceRequest?>(null)
     private var lastStatus: WendyStatus? = null
     private fun emit(value: WendyStatus) { if (running && value != lastStatus) { lastStatus = value; onStatus(value) } }
     private val key = java.util.Base64.getDecoder().decode(details.keyBase64)
     private val worker = Thread(::loop, "wendy-link").apply { isDaemon = true; start() }
-    fun query(text: String, confidence: Float) { if (text.length in 1..240) pending.set(VoiceRequest(text, confidence)) }
+    fun query(text: String, confidence: Float) { if (!gameRadio && text.length in 1..240) pending.set(VoiceRequest(text, confidence)) }
+    fun discardPending() { pending.set(null) }
     private fun loop() {
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
         while (running) {
@@ -35,8 +38,9 @@ internal class WendyClient(private val details: PairingDetails, private val onSt
                     var sequence = 0L
                     while (running) {
                         val request = pending.getAndSet(null)
-                        val json = JSONObject().put("state", state).put("allowAlerts", allowAlerts)
-                        if (request != null) json.put("text", request.text).put("confidence", if (request.confidence.isFinite()) request.confidence.toDouble() else -1.0)
+                        val radio = gameRadio
+                        val json = JSONObject().put("state", if (radio) "ERROR" else state).put("allowAlerts", !radio && allowAlerts).put("gameRadio", radio).put("audioRevision",audioRevision)
+                        if (!radio && request != null) json.put("text", request.text).put("confidence", if (request.confidence.isFinite()) request.confidence.toDouble() else -1.0)
                         val packet = WendyWire.encode(json.toString().toByteArray(Charsets.UTF_8), key, nonce, 0, ++sequence)
                         output.writeInt(packet.size); output.write(packet); output.flush()
                         val length = input.readInt(); require(length in 42..WendyWire.MAX_JSON + 40)
@@ -45,10 +49,16 @@ internal class WendyClient(private val details: PairingDetails, private val onSt
                         require(response.getBoolean("enabled"))
                         val flag = response.getString("flag")
                         require(flag in setOf("UNKNOWN", "GREEN", "YELLOW", "RED", "BLUE", "SC", "VSC", "CHECKERED"))
-                        val message = response.getString("text"); require(message.length <= 400)
+                        val message = response.getString("text"); require(message.length <= 1600)
+                        val summary = response.optString("summary"); require(summary.length <= 80)
+                        require(response.optString("commandState") in setOf("", "Requested", "Executing", "Confirmed", "Unconfirmed", "Rejected"))
                         val heard = response.optString("heard"); val intent = response.optString("intent"); val source = response.optString("source")
                         require(heard.length <= 240 && intent.length <= 64 && source.length <= 64)
-                        emit(WendyStatus(true, response.getBoolean("telemetry"), flag, message, response.getString("kind"), heard, intent, source))
+                        val inputRoute=response.optString("audioInput","Android");val outputRoute=response.optString("audioOutput","Android")
+                        require(inputRoute in setOf("PC","Android") && outputRoute in setOf("PC","Android"))
+                        require(response.optString("voiceState","IDLE") in setOf("IDLE","LISTENING","PROCESSING","SPEAKING","ERROR","GAME RADIO"))
+                        emit(WendyStatus(true, response.getBoolean("telemetry"), flag, message, response.getString("kind"), heard, intent, source, summary=summary, commandState=response.optString("commandState"),
+                            audioInput=inputRoute,audioOutput=outputRoute,volume=response.optInt("volume",100).coerceIn(0,100),audioRevision=response.optLong("audioRevision",0),voiceState=response.optString("voiceState","IDLE"),pcSpeaking=response.optBoolean("pcSpeaking",false)))
                         Thread.sleep(200)
                     }
                 }

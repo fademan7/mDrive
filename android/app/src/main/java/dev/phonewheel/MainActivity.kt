@@ -41,7 +41,7 @@ class MainActivity : Activity(), SensorEventListener {
     private lateinit var status: TextView
     private lateinit var wendy: WendyVoice
     private lateinit var wendyLabel: TextView
-    private lateinit var pttButton: Button
+    private lateinit var wendySummary: TextView
     private lateinit var flagBadge: FlagBadgeView
     private lateinit var editBar: LinearLayout
     private lateinit var rootContent: FrameLayout
@@ -133,14 +133,13 @@ class MainActivity : Activity(), SensorEventListener {
     private val connectionHealth = object : Runnable {
         override fun run() {
             if (client != null && android.os.SystemClock.elapsedRealtime() - lastStatusMs > 2000) {
-                if (arm) disarmOutput("No PC reply · controls released")
                 status.text = "No Wi-Fi reply · check PC/network"
             }
             connectionHandler.postDelayed(this, 1000)
         }
     }
     private lateinit var haptics: HapticScheduler
-    private var halfRange = 180.0
+    private var halfRange = 120.0
     private var deadzone = 0.0
     private var smoothingMs = 0.0
     private var responseCurve = 1.0
@@ -166,6 +165,22 @@ class MainActivity : Activity(), SensorEventListener {
         connectionHandler.postDelayed(connectionHealth, 5000)
         connectionHandler.post(automaticPreparation)
         requestLocalNetworkPermission()
+        savedInstanceState?.getString("peerHost")?.let { host ->
+            val session=savedInstanceState.getString("peerSession")
+            val key=savedInstanceState.getString("peerKey")
+            if(session!=null && key!=null) connect(host,session,key,savedInstanceState.getInt("peerPort",26760))
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        connectedDetails?.let { peer ->
+            outState.putString("peerHost",peer.host)
+            outState.putString("peerSession",peer.session.toString(16))
+            outState.putString("peerKey",peer.keyBase64)
+            outState.putInt("peerPort",peer.port)
+        }
+        // Pairing only; never restore ARM, pedals or calibration after recreation.
+        super.onSaveInstanceState(outState)
     }
 
     private fun buildUi() {
@@ -189,38 +204,19 @@ class MainActivity : Activity(), SensorEventListener {
             text = label; textSize = 13f; isAllCaps = false; minWidth = 0; minimumWidth = 0; setPadding(dp(4), 0, dp(4), 0)
             setOnClickListener { work() }
         }
-        panel.addView(status, LinearLayout.LayoutParams(-1, dp(24)))
+        // Keep the original pedal surface full-screen. Only this small center
+        // overlay contains Wendy status and settings; the gamepad is always visible.
         panel.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                pttButton = action("PTT") { }.apply {
-                    contentDescription = "Wendy English push to talk. Hold to speak."
-                    setOnTouchListener { view, event ->
-                        when (event.actionMasked) {
-                            android.view.MotionEvent.ACTION_DOWN -> { if (wendy.enabled) wendy.press() else showWendyOptions() }
-                            android.view.MotionEvent.ACTION_UP -> { wendy.release(); view.performClick() }
-                            android.view.MotionEvent.ACTION_CANCEL -> wendy.cancelSpeech()
-                        }; true
-                    }
-                }
-                addView(pttButton, LinearLayout.LayoutParams(dp(52), dp(52)))
-                wendyLabel = TextView(this@MainActivity).apply {
-                    text = "PTT\nOFF"; textSize = 12f; setTextColor(Color.rgb(115, 222, 206))
-                    gravity = Gravity.CENTER_VERTICAL or Gravity.START; maxLines = 2
-                    setOnClickListener { showWendyOptions() }
-                }
-                addView(wendyLabel, LinearLayout.LayoutParams(0, dp(52), 1f).apply { leftMargin = dp(8) })
-            }, LinearLayout.LayoutParams(0, dp(52), 1f))
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            wendyLabel = TextView(this@MainActivity).apply { text="WENDY OFF"; textSize=11f; setTextColor(Color.rgb(115,222,206)); maxLines=2; setOnClickListener { showWendyOptions() } }
+            addView(wendyLabel, LinearLayout.LayoutParams(0,dp(42),1f))
             flagBadge = FlagBadgeView(this@MainActivity)
-            addView(flagBadge, LinearLayout.LayoutParams(dp(44), dp(44)).apply { setMargins(dp(8), 0, dp(8), 0) })
-            // Equal left/right weights keep the flag at the screen's true center.
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.END
-                addView(action("Center") { calibrateCenter() }, LinearLayout.LayoutParams(dp(52), dp(52)).apply { rightMargin = dp(6) })
-                addView(action("Options") { showOptions() }, LinearLayout.LayoutParams(dp(52), dp(52)))
-            }, LinearLayout.LayoutParams(0, dp(52), 1f))
+            addView(flagBadge, LinearLayout.LayoutParams(dp(24),dp(24)))
+            wendySummary = TextView(this@MainActivity).apply { text=""; textSize=12f; gravity=Gravity.CENTER; maxLines=2; setTextColor(Color.rgb(255,210,100)) }
+            addView(wendySummary, LinearLayout.LayoutParams(0,dp(42),1.5f))
+            addView(action("mDrive ⚙") { showOptions() }, LinearLayout.LayoutParams(0,dp(42),1f))
         })
+        panel.addView(status, LinearLayout.LayoutParams(-1,dp(18)))
 
         editBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
@@ -235,6 +231,7 @@ class MainActivity : Activity(), SensorEventListener {
         panel.addView(editBar)
 
         pedals = PedalTouchView(this).apply {
+            onPtt = { pressed -> if (::wendy.isInitialized) wendy.gameRadioButton(pressed) }
             onValues = { b, t, keys -> brake = b; throttle = t; buttons = keys; publish() }
             onSelectionChanged = { label -> if (editMode && label != null) {
                 status.text = if (label == "Brake" || label == "Throttle") "$label width · 20–25%" else "$label · drag to move / resize"
@@ -249,8 +246,8 @@ class MainActivity : Activity(), SensorEventListener {
             }
         }
         wendy = WendyVoice(this) { state, flag, message ->
-            pttButton.visibility = if (wendy.alwaysListening) View.GONE else View.VISIBLE
-            wendyLabel.text = "${if (wendy.alwaysListening) "AUTO" else "PTT"}\n${if (wendy.enabled) state else "OFF"}"
+            wendyLabel.text = "WENDY ${if (wendy.enabled && wendy.alwaysListening) "AUTO" else ""}\n${if (wendy.enabled) state else "OFF"}"
+            wendySummary.text = wendy.summary
             flagBadge.setFlag(flag)
             wendyLabel.contentDescription = "Wendy $state. $message"
             updateWendyInfo()
@@ -273,37 +270,30 @@ class MainActivity : Activity(), SensorEventListener {
     }
 
     private fun showOptions() {
-        val fields = inlineFields("mDrive 0.5.5 · Options")
-        arrayOf("QR / PC connection", "Steering / pedals", "Edit control layout", "Test phone vibration",
-            if (haptics.gameRumbleEnabled) "Game vibration: ON" else "Game vibration: OFF", "Wendy F1 Engineer", "About / Creator", "Controller diagnostics").forEachIndexed { which, label ->
-            fields.addView(Button(this).apply { text = label; isAllCaps = false; setOnClickListener {
-                closeInlinePanel()
-                when (which) {
-                    0 -> AlertDialog.Builder(this@MainActivity).setTitle("PC connection")
-                        .setItems(arrayOf("Scan QR (recommended)", "Manual entry")) { _, method ->
-                            if (method == 0) scanConnection() else showConnectionDialog()
-                        }.setNegativeButton("Cancel", null).show()
-                    1 -> showSteeringDialog()
-                    2 -> { if (!pedals.editMode) toggleEditMode() }
-                    3 -> status.text = if (haptics.test()) "Vibration test started" else "No vibrator available"
-                    4 -> {
-                        haptics.gameRumbleEnabled = !haptics.gameRumbleEnabled
-                        getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putBoolean("gameRumble", haptics.gameRumbleEnabled).apply()
-                        status.text = if (haptics.gameRumbleEnabled) "Game vibration ON (not TC/ABS detection)" else "Game vibration OFF"
-                    }
-                    5 -> showWendyOptions()
-                    6 -> showAbout()
-                    7 -> showControllerDiagnostics()
-                }
-            } })
-        }
+        val fields = inlineFields("mDrive")
+        val actions = listOf<Pair<String, () -> Unit>>(
+            "QR connection" to { closeInlinePanel(); scanConnection() },
+            "Center wheel" to { closeInlinePanel(); calibrateCenter() },
+            "Wendy · F1 2025/2026" to { showWendyOptions() },
+            "Steering / pedals" to { closeInlinePanel(); showSteeringDialog() },
+            "Control layout" to { closeInlinePanel(); if(!pedals.editMode) toggleEditMode() },
+            "Diagnostics" to { showControllerDiagnostics() }, "About" to { showAbout() })
+        addGrid(fields, actions)
         showInlinePanel(fields)
     }
-
+    private fun addGrid(fields: LinearLayout, actions: List<Pair<String, () -> Unit>>) {
+        actions.chunked(2).forEach { pair ->
+            fields.addView(LinearLayout(this).apply {
+                orientation=LinearLayout.HORIZONTAL
+                pair.forEach { (label, work) -> addView(Button(this@MainActivity).apply { text=label; isAllCaps=false; textSize=13f; setOnClickListener { work() } }, LinearLayout.LayoutParams(0,dp(48),1f)) }
+            })
+        }
+    }
     private fun showAbout() {
         val fields = inlineFields("mDrive · Created by fademan7 / neojshin")
         fields.addView(TextView(this).apply {
-            text = "Wheel controller & Wendy F1 Engineer\n\nhttps://fademan7.github.io/\n\nneojshin@gmail.com\n\nOpen external links only with the game paused."
+            text = "Wheel controller & Wendy F1 Engineer\n\nhttps://fademan7.github.io/\n\nneojshin@gmail.com\n\nWendy: English system speech recognition (may use internet) and TTS. AUTO listens while this app is visible and pauses during replies. No audio recordings saved.\nLB is reserved for game radio, not Wendy PTT. Wendy stops listening and speaking while LB is held and for 8 seconds after release, then resumes AUTO. Another press extends the pause. The game menu closing is not detected.\nLB still sends its original gamepad input. Bind LB to radio in F1 if needed; no keyboard T is injected. Game commands use F1's microphone, not audio forwarded from the phone.\nABXY, D-pad, LB/RB, Back/Start and Right Stick stay available. QR scanning, layout editing and steering setup safely release controls.\nTyre remaining is an uncertain wear-trend estimate, not an optimal strategy.\nOpen links only with the game paused."
+            append("\n\nAudio routing: select PC or Android separately for microphone and voice output in the PC QR window. PC/PC is the default. Wendy volume is also in that window. PC uses Windows English speech and default audio devices; Android uses its system speech service when selected. Only text is exchanged, never microphone audio. No duplicate playback.")
             textSize = 16f; setTextColor(Color.WHITE); setLinkTextColor(Color.rgb(115, 222, 206))
             android.text.util.Linkify.addLinks(this, android.text.util.Linkify.WEB_URLS or android.text.util.Linkify.EMAIL_ADDRESSES)
             movementMethod = android.text.method.LinkMovementMethod.getInstance()
@@ -327,38 +317,15 @@ class MainActivity : Activity(), SensorEventListener {
         showInlinePanel(fields)
     }
 
-    private fun showConnectionDialog() {
-        releaseInputs("Connection setup · controls released")
-        val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(4), dp(20), 0) }
-        val host = field("PC IP", connectionHost)
-        val session = field("Session hex", connectionSession)
-        val key = field("Key Base64", connectionKey).apply { inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD }
-        fields.addView(host); fields.addView(session); fields.addView(key)
-        AlertDialog.Builder(this).setTitle("PC connection").setView(fields)
-            .setPositiveButton("Connect") { _, _ ->
-                connectionHost = host.text.toString().trim(); connectionSession = session.text.toString().trim(); connectionKey = key.text.toString().trim()
-                connect(connectionHost, connectionSession, connectionKey)
-            }.setNegativeButton("Cancel", null).show()
-    }
-
     private fun showWendyOptions() {
         // In-window panel: does not cancel pedal pointers, release inputs, steal
         // activity focus, or restart either network connection.
-        val fields = inlineFields("Wendy · English")
-        wendy.checkDeviceSupport()
+        val fields = inlineFields("Wendy · F1 2025 / 2026")
         wendyInfo = TextView(this).apply { setTextColor(Color.WHITE); textSize = 13f }
-        fields.addView(wendyInfo)
-        fun option(label: String, action: () -> Unit) { fields.addView(Button(this).apply { text = label; isAllCaps = false; setOnClickListener { action(); updateWendyInfo() } }) }
-        option(if (wendy.enabled) "Wendy OFF" else "Wendy ON") { wendy.enable(!wendy.enabled); showWendyOptions() }
-        option("Push to talk") { wendy.setAlwaysListening(false) }
-        option("AUTO: system (recommended)") { wendy.setAlwaysListening(true, false) }
-        option("AUTO: on-device (English download required)") { wendy.setAlwaysListening(true, true) }
-        option("Retry voice service") { wendy.retry() }
-        fields.addView(TextView(this).apply {
-            setTextColor(Color.LTGRAY); textSize = 12f
-            text = "System mode uses your PTT provider and may send speech to its online service. Selecting it enables repeated recognition while this app is visible. On-device mode needs an installed English model. No audio files are saved by mDrive. Use a headset; battery use may increase. Wendy pauses its microphone while speaking.\n\nController connection stays active while this panel is open. Box box is a reminder, not an in-game pit request."
-        })
-        showInlinePanel(fields, preserveInfo = true); updateWendyInfo()
+        addGrid(fields, listOf(
+            "Connect voice status" to { wendy.setAlwaysListening(true,false); showWendyOptions() },
+            "Retry voice" to { wendy.retry(); closeInlinePanel() }, "About" to { showAbout() }))
+        showInlinePanel(fields)
     }
     private fun inlineFields(title: String) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(12), dp(8), dp(12), dp(8)); setBackgroundColor(0xFF202830.toInt())
@@ -406,10 +373,10 @@ class MainActivity : Activity(), SensorEventListener {
         val dead = labeledField(fields, "Center deadzone (0–5°)", deadzone.toString())
         val smooth = labeledField(fields, "Sensor smoothing (0–30 ms)", smoothingMs.toString())
         val curve = labeledField(fields, "Response curve (0.6–2.0, 1=linear)", responseCurve.toString())
-        fields.addView(TextView(this).apply { text = "Pedals: bottom 10%=0%, top 10%=100%, linear in between. The white line shows the detected touch.\nLinear steering: curve 1 / deadzone 0 / smoothing 0. At 180° half-range: 45°=25%, 90°=50%, 180°=100%." })
+        fields.addView(TextView(this).apply { text = "Pedals: bottom 10%=0%, top 10%=100%, linear in between. The white line shows the detected touch.\nDefault steering: 120° each side, curve 1 / deadzone 0 / smoothing 0. Phone 0°=0%, 60°=50%, 120°=100%. Game wheel animation depends on game settings." })
         val scroll = ScrollView(this).apply { addView(fields) }
         AlertDialog.Builder(this).setTitle("Steering / pedal settings")
-            .setNeutralButton("Steering gain 1.55x") { _, _ -> applySettings("116", "0", "0", "1") }
+            .setNeutralButton("Linear 120°") { _, _ -> applySettings("120", "0", "0", "1") }
             .setView(scroll).setPositiveButton("Apply") { _, _ ->
                 applySettings(range.text.toString(), dead.text.toString(), smooth.text.toString(), curve.text.toString())
             }.setNegativeButton("Cancel", null).show()
@@ -433,7 +400,14 @@ class MainActivity : Activity(), SensorEventListener {
 
     private fun loadSettings() {
         val p = getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
-        halfRange = p.getFloat("halfRange180", 180f).toDouble(); deadzone = p.getFloat("deadzone", 0f).toDouble()
+        // Requested one-time upgrade, before a controller session is created.
+        // Keep all pairing, pedal, layout and Wendy preferences unchanged.
+        if (!p.getBoolean("linear120Applied", false)) {
+            p.edit().putFloat("halfRange180", 120f).putFloat("deadzone", 0f)
+                .putFloat("smoothing", 0f).putFloat("curve", 1f)
+                .putBoolean("linear120Applied", true).apply()
+        }
+        halfRange = p.getFloat("halfRange180", 120f).toDouble(); deadzone = p.getFloat("deadzone", 0f).toDouble()
         smoothingMs = p.getFloat("smoothing", 0f).toDouble(); responseCurve = p.getFloat("curve", 1f).toDouble()
     }
 
@@ -484,7 +458,7 @@ class MainActivity : Activity(), SensorEventListener {
                                 // A delayed UI callback must not erase a newer recovered ACK.
                                 val observed = receivedStatus.get()
                                 if ((observed == null || observed.receivedMs <= lostAt) && receivedStatus.compareAndSet(observed, null))
-                                    disarmOutput("Wi-Fi reply lost · checking connection")
+                                    status.text = "Wi-Fi reply lost · recovering fresh input"
                             }
                         } }, flight = flight)
                     android.util.Log.i("PhoneWheel", "Controller transport created")
@@ -516,10 +490,11 @@ class MainActivity : Activity(), SensorEventListener {
         super.onResume(); foreground = true
         flight.record(FlightEntry(FlightEvent.RESUME))
         if (::wifiLease.isInitialized) wifiLease.update(connectedDetails != null, true)
+        client?.resumeConnection()
         if (::wendy.isInitialized) wendy.foreground(true)
         sensorThread = HandlerThread("phonewheel-sensor", Process.THREAD_PRIORITY_MORE_FAVORABLE).apply { start() }
         rotationSensor?.let { sensorManager.registerListener(this, it, 5_000, 0, Handler(sensorThread.looper)) }
-        sensorValid = false; publish()
+        sensorValid = false; sensorTimestampNs = 0; latestQuaternion = null; publish()
         autoDrive.request(true)
     }
 

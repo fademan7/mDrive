@@ -8,6 +8,10 @@ namespace PhoneWheel.Core;
 public static class WendyDataQueries
 {
     private static readonly (DriverIntent Intent, string Pattern)[] Queries = [
+        // Literal game-radio labels, also after polite Request() wrappers. Read only.
+        (DriverIntent.GET_RACE_SUMMARY, @"^(?:a |the )?full race (?:update|report)$"),
+        (DriverIntent.GET_DAMAGE, @"^(?:(?:what is|whats) )?(?:(?:the|my|our) )?(?:vehicle|car) (?:condition|condition report)$"),
+        (DriverIntent.GET_PIT_INFORMATION, @"^(?:(?:what is|whats) )?(?:the )?pit stop (?:information|info|report)$"),
         (DriverIntent.GET_WEATHER_FORECAST, @"^(weather forecast|forecast|rain forecast|is it going to rain|will it rain|when (will|does) (the )?rain (start|come)|rain coming|any rain coming|chance of rain|whats the forecast|what is the forecast)$"),
         (DriverIntent.GET_GAP_LEADER, @"^((what is|whats) (the |my )?)?gap to (the )?(race )?leader$|^how far (is|to) (the )?leader$"),
         (DriverIntent.RADIO_CHECK, @"^(radio check|can you hear me|are you there|are you working|wendy|hello wendy|check radio)$"),
@@ -37,6 +41,16 @@ public static class WendyDataQueries
         WendyReply Missing(string name) => new($"{name} is unavailable.");
         string Seconds(uint ms) => (ms / 1000.0).ToString("0.000", CultureInfo.InvariantCulture);
         switch (intent) {
+            case DriverIntent.GET_PIT_INFORMATION:
+                if (!Fresh(r.LapMs) || !F1RaceState.Fresh(r.SessionMs, now, 3000)) return Missing("Pit stop information");
+                var report = r.Pit switch { 1 => "You are pitting.", 2 => "You are in the pit area.", _ => "You are out on track." };
+                report += $" Completed stops: {r.PitStops}.";
+                if (r.PitIdealLap > 0 && r.PitLatestLap >= r.PitIdealLap && r.PitLatestLap <= r.TotalLaps) {
+                    report += $" Game pit target lap {r.PitIdealLap}, latest lap {r.PitLatestLap}.";
+                    if (r.PitRejoinPosition > 0) report += $" Predicted rejoin P {r.PitRejoinPosition}.";
+                } else report += " No reliable game pit window available.";
+                report += " Next tyre selection and crew readiness are not available in telemetry.";
+                return new(report);
             case DriverIntent.GET_GAP_LEADER: return !Fresh(r.LapMs) ? Missing("Gap to leader") : r.Position == 1 ? new("You are leading the race.") : r.LeaderGap is double gap ? new($"Gap to the leader is {gap.ToString("0.0", CultureInfo.InvariantCulture)} seconds.") : Missing("Same-lap gap to leader");
             case DriverIntent.GET_WEATHER_FORECAST:
                 if (!F1RaceState.Fresh(r.SessionMs, now, 3000) || r.Forecast.Length == 0) return Missing("Game weather forecast for this session");

@@ -3,7 +3,7 @@
 ## 적용 결과
 
 - Android versionCode 12 / versionName 0.5.0: Fold5 SM-F946N에 `adb install -r` Success. 기존 앱 데이터/조향/페달/레이아웃 설정 보존. `dumpsys package`로 버전 확인, 앱 실행 후 PID 16094 확인. 최근 종료 사유는 패키지 업데이트이며 새 시작 crash는 관측하지 않았습니다.
-- PC `release/receiver/PhoneWheel.Receiver.exe`를 새 Release publish 결과로 교체하고 사용자 승인 후 Wi-Fi QR / Engineer ON으로 재시작했습니다. PID 132896, MainWindowTitle `PhoneWheel · Wi-Fi QR 연결`, Responding true. 172.30.1.3:26760 UDP, 172.30.1.3:26762 TCP, 127.0.0.1:20777 UDP 리스너 확인.
+- PC `release/receiver/PhoneWheel.Receiver.exe`를 새 Release publish 결과로 교체하고 사용자 승인 후 Wi-Fi QR / Engineer ON으로 재시작했습니다. PID 132896, MainWindowTitle `PhoneWheel · Wi-Fi QR 연결`, Responding true. [LAN-IP redacted]:26760 UDP, [LAN-IP redacted]:26762 TCP, 127.0.0.1:20777 UDP 리스너 확인.
 - 새 EXE SHA256 `99339347BE111109342FFC22818A8802ED448099103773DD671EDDAA0F3C5EDA`가 `release/receiver-050` 빌드와 일치. 기존 0.4.0 EXE는 `release/backups/PhoneWheel.Receiver-before-050.exe`에 보존했습니다. 최초 교체는 종료 직후 파일 잠금으로 실패했으나 프로세스 종료 재확인 후 복사/해시/재실행 완료.
 - 모델/CPU 런타임은 0.4.0의 검증한 번들을 그대로 사용. 새 다운로드나 GPU backend 없음. 기존 0.4.0 ZIP은 새 버전 배포물이 아닙니다.
 

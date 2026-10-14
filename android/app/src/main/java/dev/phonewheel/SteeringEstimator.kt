@@ -14,7 +14,7 @@ data class Quaternion(val w: Double, val x: Double, val y: Double, val z: Double
 }
 
 class SteeringEstimator(
-    private val halfRange: Double = 180.0,
+    private val halfRange: Double = 120.0,
     private val deadzone: Double = 0.0,
     private val sign: Double = -1.0,
     private val smoothingMs: Double = 0.0,

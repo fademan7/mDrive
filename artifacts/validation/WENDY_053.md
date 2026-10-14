@@ -52,7 +52,7 @@ Forecast offsets/types checked against [EA F1 25 UDP v3](https://forums.ea.com/t
 
 ## Connected-device follow-up — 2026-09-20
 
-ADB returned with the user's USB reconnection. Both APKs installed successfully; the default Receiver EXE was replaced with 0.5.3, preserving the CPU model bundle and backing up the old EXE in `release/backups/PhoneWheel.Receiver-before-053.exe`. No normal receiver was running when deployment began. PC Wi-Fi address is now `172.30.1.15`, not the previous address.
+ADB returned with the user's USB reconnection. Both APKs installed successfully; the default Receiver EXE was replaced with 0.5.3, preserving the CPU model bundle and backing up the old EXE in `release/backups/PhoneWheel.Receiver-before-053.exe`. No normal receiver was running when deployment began. PC Wi-Fi address is now `[LAN-IP redacted]`, not the previous address.
 
 The first real microphone/settings isolation run **failed**: the phone disarmed during repeated Options/Wendy panel cycles after 8 microphone starts/ready callbacks with no non-silence voice errors. Focus and sensor were fresh at the logged release, ACK age 8ms, current PC reason User (5). The original PC stop cause was not captured in that run, so this does not prove which fault caused it. Two unchanged-code repeats passed, confirming intermittency rather than proving a fix.
 

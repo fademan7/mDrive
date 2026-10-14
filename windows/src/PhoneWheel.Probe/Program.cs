@@ -26,6 +26,10 @@ catch (Exception ex)
 
 using (output)
 {
+    if (args.Contains("--rumble-only")) {
+        if (output is not ViGEmGamepadOutput pad) return Fail("Rumble probe requires ViGEm.");
+        return RumbleProbe.Run(pad);
+    }
     Console.WriteLine($"Backend={output.Name}. Observe XInput now; Ctrl+C always attempts neutralization.");
     using var cancel = new CancellationTokenSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; cancel.Cancel(); };

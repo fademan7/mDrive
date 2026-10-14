@@ -9,6 +9,8 @@ public static class WendyNaturalLanguage
     private static bool Has(string q, string pattern) => Regex.IsMatch(q, @"\b(?:" + pattern + @")\b");
     public static string Request(string text) {
         var q = WendyLanguage.Normalize(text);
+        // Narrow read-only vocabulary corrections, never fuzzy numeric/action commands.
+        q = Regex.Replace(q, @"\b(?:demage|dammage)\b", "damage");
         q = Regex.Replace(q, @"^(?:ok|okay|alright)\s+", "");
         q = Regex.Replace(q, @"\b(d r s|e r s|r p m)\b", m => m.Value.Replace(" ", ""));
         for (var i = 0; i < 4; i++) {
@@ -21,6 +23,8 @@ public static class WendyNaturalLanguage
     public static WendyIntent? Match(string text) {
         var q = Request(text);
         if (q.Length == 0) return new(DriverIntent.RADIO_CHECK);
+        if (WendyConversation.RadioCheck(text)) return new(DriverIntent.RADIO_CHECK);
+        if (WendyConversation.Reply(text)!=null) return new(DriverIntent.SMALL_TALK);
         if (q is "hear me" or "hear me clearly" or "read me" or "you there" or "radio check") return new(DriverIntent.RADIO_CHECK);
         if (Has(q, "(?:ignore|override|forget).*(?:rules|instructions|prompt)")) return WendyIntent.Unknown;
         if (Has(q, "(?:dont|do not|never).*go ahead")) return WendyIntent.Unknown;
@@ -50,7 +54,7 @@ public static class WendyNaturalLanguage
                 : tyre && Has(q, "overheating|too hot") ? DriverSymptom.TYRE_OVERHEATING
                 : DriverSymptom.NONE;
             if (symptom != DriverSymptom.NONE) {
-                var phase = Has(q, "exit|back on.*power|accelerating out") ? CornerPhase.CORNER_EXIT
+                var phase = Has(q, "exit|back on.*power|accelerating out|out of (?:slow )?corners?") ? CornerPhase.CORNER_EXIT
                     : Has(q, "entry|turn in|braking") ? CornerPhase.CORNER_ENTRY
                     : Has(q, "apex|mid corner|halfway") ? CornerPhase.MID_CORNER
                     : Has(q, "straight") ? CornerPhase.STRAIGHT : CornerPhase.UNKNOWN;
@@ -72,8 +76,13 @@ public static class WendyNaturalLanguage
             hits.Add(leader ? DriverIntent.GET_GAP_LEADER : behind ? DriverIntent.GET_GAP_BEHIND : DriverIntent.GET_GAP_AHEAD);
         }
         var fuel = Has(q, "fuel|petrol|gas");
-        var damage = Has(q, "damage|damaged|broken|fault");
+        var damage = Has(q, "damage|damaged|broken|fault|(?:vehicle|car) condition");
         var pit = Has(q, "pit|pits|pitting|box|stop|stops");
+        // Damage/tyres are evidence within a pit question, not competing intents.
+        if (pit && Has(q, "should|need|recommend|advi(?:ce|sable)|strategy|window|when|worth|necessary|time to"))
+            return new(DriverIntent.GET_PIT_ADVICE);
+        if (Has(q, "front wing|rear wing") && !Has(q, "settings?|setup|angle|increase|decrease|change|set"))
+            return new(DriverIntent.GET_DAMAGE);
         var tyreAge = tyre && Has(q, "age|old|how many laps");
         var tyreCompound = tyre && Has(q, "compound|which|what.*(?:am i on|are we on|using)");
         if (temp) {

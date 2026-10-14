@@ -37,6 +37,6 @@ test_requires_neutral_dwell_and_rising_arm_edge (test_controller_core.SafetyTest
 test_unknown_acknowledgement_rejected (test_controller_core.SafetyTests.test_unknown_acknowledgement_rejected) ... ok
 
 ----------------------------------------------------------------------
-Ran 37 tests in 0.016s
+Ran 37 tests in 0.013s
 
 OK

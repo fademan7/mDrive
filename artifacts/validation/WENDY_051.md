@@ -38,7 +38,7 @@ Final Android build/lint succeeded: **42 tests**, **0 errors / 43 warnings** (in
 
 Android 0.5.1 versionCode 13. Windows default executable replaced with the published result; SHA256 `D7286D8F10422C5E6ECFF4733BF2597397249EE6DCF1C3DFC54023DD2988DF2A`. Old binary backed up to `release/backups/PhoneWheel.Receiver-before-051.exe`. CPU bundle unchanged. The user approved app installation and receiver restart with game paused.
 
-Final normal receiver PID 139844: `PhoneWheel · Wi-Fi QR connection`, Responding=true; 172.30.1.77 UDP26760/TCP26762 and loopback UDP20777 confirmed. Phone main app PID 30457, versionCode13/versionName0.5.1 confirmed. Test APK uninstall returned Success; only the temporary development package was removed. Scan the newly generated QR; the previous pairing is no longer current.
+Final normal receiver PID 139844: `PhoneWheel · Wi-Fi QR connection`, Responding=true; [LAN-IP redacted] UDP26760/TCP26762 and loopback UDP20777 confirmed. Phone main app PID 30457, versionCode13/versionName0.5.1 confirmed. Test APK uninstall returned Success; only the temporary development package was removed. Scan the newly generated QR; the previous pairing is no longer current.
 
 ## Changed files
 

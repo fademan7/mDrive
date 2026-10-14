@@ -13,6 +13,7 @@ internal static class WendyServiceTests
         using var udpProbe = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)); var telemetryPort = ((IPEndPoint)udpProbe.Client.LocalEndPoint!).Port; udpProbe.Close();
         var key = new byte[32];
         using var service = new WendyService(IPAddress.Loopback, key, port, telemetryPort);
+        service.ConfigureAudio(WendyAudioDevice.Android,WendyAudioDevice.Android,85);
         service.SetEnabled(true);
         using var deadline = new CancellationTokenSource(10000);
         using var peer = new TcpClient();
@@ -42,6 +43,20 @@ internal static class WendyServiceTests
             var answer = reply.RootElement.GetProperty("text").GetString()!;
             if (string.IsNullOrWhiteSpace(answer) || answer.Length > 400) throw new Exception("reply bound");
             if (intent == "RADIO_CHECK" && !answer.Contains("Loud and clear")) throw new Exception("radio round trip");
+        }
+        // Same authenticated socket/sequence throughout: radio suppression is not a reconnect.
+        foreach (var radio in new[] {true,true,false}) {
+            var json=JsonSerializer.SerializeToUtf8Bytes(new {state="PROCESSING",text="Radio check",confidence=.99,gameRadio=radio});
+            var wire=WendyWire.Encode(json,key,nonce,0,++sequence);var prefix=new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(prefix,wire.Length);
+            await stream.WriteAsync(prefix,deadline.Token);await stream.WriteAsync(wire,deadline.Token);
+            await stream.ReadExactlyAsync(prefix,deadline.Token);
+            var packet=new byte[BinaryPrimitives.ReadInt32BigEndian(prefix)];await stream.ReadExactlyAsync(packet,deadline.Token);
+            using var reply=JsonDocument.Parse(WendyWire.Decode(packet,key,nonce,1,sequence));
+            var answer=reply.RootElement.GetProperty("text").GetString()!;
+            if(radio && (answer!="" || reply.RootElement.GetProperty("intent").GetString()!="" || !service.Display.Contains("GAME RADIO")))
+                throw new Exception("game radio must not classify, reply or disconnect");
+            if(!radio && !answer.Contains("Loud and clear")) throw new Exception("radio resume on same socket");
         }
     }
     public static void Run() => CheckAsync().GetAwaiter().GetResult();

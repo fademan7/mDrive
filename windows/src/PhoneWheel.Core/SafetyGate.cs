@@ -54,7 +54,10 @@ public sealed class SafetyGate
             _lastDirectionSequence = frame.Header.Sequence;
             _flight?.Record(new(ControlEvent.Hello, Sequence: frame.Header.Sequence, Armed: Armed), reconnect);
             if (reconnect) {
-                DisarmLocked(ReleaseReason.Timeout);
+                // HELLO is not permission to drive. Preserve only an existing
+                // network-recovery ticket; hard faults never create one.
+                if (Armed && _supportsRecovery) BeginRecovery((_lastReceiveMs ?? 0) + _timeoutMs);
+                else if (_recoverySince == null) DisarmLocked(ReleaseReason.Timeout);
                 _sentHistory.Clear();
                 _lastReceiveMs = null;
             }
@@ -186,20 +189,24 @@ public sealed class SafetyGate
 
     private Controls TickLocked(double nowMs)
     {
-        if (_recoverySince is double cutoff) {
-            if (nowMs >= cutoff + _challengeMs) DisarmLocked(ReleaseReason.Timeout);
-        } else if (_lastReceiveMs is null || nowMs - _lastReceiveMs >= _timeoutMs) {
+        if (_recoverySince == null && (_lastReceiveMs is null || nowMs - _lastReceiveMs >= _timeoutMs)) {
             var expiry = (_lastReceiveMs ?? nowMs) + _timeoutMs;
-            if (Armed && _supportsRecovery && nowMs < expiry + _challengeMs) {
-                RecordRelease(ReleaseReason.Timeout);
-                Armed = false;
-                Output = Controls.Neutral;
-                Reason = ReleaseReason.Recovering;
-                _recoverySince = expiry;
-                _flight?.Record(new(ControlEvent.RecoveryHold, Armed: false, Release: Reason));
-            } else DisarmLocked(ReleaseReason.Timeout);
+            if (Armed && _supportsRecovery) BeginRecovery(expiry);
+            else DisarmLocked(ReleaseReason.Timeout);
         }
         return Output;
+    }
+
+    private void BeginRecovery(double cutoff) {
+        RecordRelease(ReleaseReason.Timeout);
+        Armed = false;
+        Output = Controls.Neutral;
+        Reason = ReleaseReason.Recovering;
+        // This is eligibility, not an input lease. Output stays neutral for the
+        // entire outage. Resume still requires a <=100ms post-cutoff challenge,
+        // live READY+ARM, unchanged calibration and a new authenticated sequence.
+        _recoverySince = cutoff;
+        _flight?.Record(new(ControlEvent.RecoveryHold, Armed: false, Release: Reason));
     }
 
     private void DisarmLocked(ReleaseReason reason)

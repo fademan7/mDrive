@@ -71,7 +71,7 @@ private data class ControlBox(
             x = if (kind == ControlKind.BRAKE) 0f else 1f - w
         } else {
             w = w.coerceIn(.045f, .20f); h = h.coerceIn(.07f, .22f)
-            x = x.coerceIn(minX, maxX - w); y = y.coerceIn(.29f, 1f - h)
+            x = x.coerceIn(minX, maxX - w); y = y.coerceIn(.23f, .93f - h)
         }
     }
 }
@@ -106,6 +106,8 @@ class PedalTouchView(context: Context) : View(context) {
     private val buttonPointers = mutableMapOf<Int, Int>()
     private val touchPoints = mutableMapOf<Int, PointF>()
     private val lookStick = LookStickPreview()
+    private val lbPtt = ButtonPtt()
+    var onPtt: ((Boolean) -> Unit)? = null
     val lookX get() = lookStick.x
     val lookY get() = -lookStick.y // Android down is positive; XInput up is positive.
     val hasActiveTouch get() = touchPoints.isNotEmpty()
@@ -156,6 +158,25 @@ class PedalTouchView(context: Context) : View(context) {
             prefs.getString(LAYOUT_KEY, null)?.let { prefs.edit().putString("layout_before_spacing_v6", it).apply() }
             spreadButtonGroups()
             saveLayout(); prefs.edit().putBoolean("look_spacing_v6", true).apply()
+        }
+        if (!prefs.getBoolean("race_menu_v7", false)) {
+            prefs.getString(LAYOUT_KEY, null)?.let { prefs.edit().putString("layout_before_race_v7", it).apply() }
+            val positions = mapOf("lb" to Pair(.28f,.24f), "back" to Pair(.42f,.24f), "start" to Pair(.53f,.24f), "rb" to Pair(.67f,.24f),
+                "dleft" to Pair(.27f,.55f), "dup" to Pair(.32f,.42f), "ddown" to Pair(.32f,.68f), "dright" to Pair(.37f,.55f),
+                "x" to Pair(.58f,.55f), "y" to Pair(.63f,.42f), "a" to Pair(.63f,.68f), "b" to Pair(.68f,.55f))
+            boxes.filter { it.kind == ControlKind.BUTTON }.forEach { b ->
+                positions[b.id]?.let { b.x=it.first; b.y=it.second; b.w=.05f; b.h=minOf(.12f, .05f*w/max(1,h)) }
+            }
+            saveLayout(); prefs.edit().putBoolean("race_menu_v7", true).apply()
+        }
+        if (!prefs.getBoolean("larger_buttons_v8", false)) {
+            prefs.getString(LAYOUT_KEY, null)?.let { prefs.edit().putString("layout_before_larger_v8", it).apply() }
+            // Enlarge standard buttons around their centres. Respect manually resized controls.
+            boxes.filter { it.kind == ControlKind.BUTTON && kotlin.math.abs(it.w - .05f) < .0001f }.forEach { b ->
+                val cx=b.x+b.w/2; val cy=b.y+b.h/2
+                b.w=.058f; b.h=minOf(.145f,b.w*w/max(1,h)); b.x=cx-b.w/2; b.y=cy-b.h/2; clampBox(b)
+            }
+            saveLayout(); prefs.edit().putBoolean("larger_buttons_v8", true).apply()
         }
     }
 
@@ -266,7 +287,11 @@ class PedalTouchView(context: Context) : View(context) {
     private fun hit(x: Float, y: Float) = boxes.asReversed().firstOrNull { it.rect(width, height).contains(x, y) }
     override fun performClick(): Boolean { super.performClick(); return true }
     private fun buttonsMask(): UShort = buttonPointers.values.fold(0) { mask, bit -> mask or bit }.toUShort()
-    private fun emit() = onValues?.invoke(brake.value, throttle.value, buttonsMask())
+    private fun emit() {
+        val keys = buttonsMask()
+        onValues?.invoke(brake.value, throttle.value, keys) // Publish unchanged controls first.
+        lbPtt.update(keys)?.let { onPtt?.invoke(it) }
+    }
 
     fun cancelAll() { brake.cancel(); throttle.cancel(); lookStick.cancel(); buttonPointers.clear(); touchPoints.clear(); emit(); invalidate() }
 
@@ -357,7 +382,7 @@ class PedalTouchView(context: Context) : View(context) {
     }
 
     private fun drawSteeringIndicator(canvas: Canvas) {
-        val left = width * .49f; val right = width * .69f; val y = height * .255f
+        val left = width * .49f; val right = width * .69f; val y = height * .19f
         val center = (left + right) / 2f
         paint.strokeWidth = 3f * resources.displayMetrics.density; paint.color = Color.rgb(75, 88, 100)
         canvas.drawLine(left, y, right, y, paint); canvas.drawLine(center, y - 9f, center, y + 9f, paint)

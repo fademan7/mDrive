@@ -1,0 +1,17 @@
+mDrive
+Copyright (C) 2026 fademan7 / neojshin and contributors
+
+SPDX-License-Identifier: GPL-3.0-only
+
+mDrive is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 3, as published by
+the Free Software Foundation.
+
+mDrive is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See LICENSE for the full terms.
+
+This license applies to original mDrive code and documentation. Third-party
+components retain their respective licenses; their notices are not replaced.
+Release source and build instructions: https://github.com/fademan7/mDrive
+Contact: neojshin@gmail.com

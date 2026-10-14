@@ -1,7 +1,12 @@
-mDrive 0.5.14 - Preview for Windows x64
+mDrive 0.5.17 - Preview for Windows x64
 Created by fademan7 / neojshin
 https://fademan7.github.io/
 neojshin@gmail.com
+
+mDrive is free software under GNU GPL version 3 only (GPL-3.0-only),
+without warranty. See notices/mDrive-GPL-3.0.txt and notices/COPYRIGHT.
+Matching source and build scripts: https://github.com/fademan7/mDrive/tree/v0.5.17
+Third-party components retain their own licenses.
 
 This installer includes the receiver, an offline English Vosk speech model,
 and the original signed ViGEmBus 1.22.0 installer. The existing driver is kept

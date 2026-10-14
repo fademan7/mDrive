@@ -4,9 +4,9 @@ Turn your Android phone into a wireless controller for Windows racing games. Rot
 
 **Wendy F1 Engineer** adds English voice questions, telemetry-based race updates, and driving guidance for **F1 25 / 2026 Season Pack**. Wendy is optional: the controller works without it.
 
-**Current version: 0.5.16 Preview** · Windows x64 + Android 13 or later · Wi-Fi only
+**Current version: 0.5.17 Preview** · Windows x64 + Android 13 or later · Wi-Fi only · **GPL-3.0-only**
 
-[Download](https://github.com/fademan7/mDrive/releases/tag/v0.5.16) · [한국어 안내](README.ko.md) · [Release notes](docs/RELEASE_0516.md)
+[Download](https://github.com/fademan7/mDrive/releases/tag/v0.5.17) · [한국어 안내](README.ko.md) · [Release notes](docs/RELEASE_0517.md) · [License](LICENSE)
 
 ## Features
 
@@ -27,15 +27,17 @@ Update the PC receiver and Android app together.
 
 | Download | Contents |
 |---|---|
-| [Windows x64 installer](https://github.com/fademan7/mDrive/releases/download/v0.5.16/mDrive-0.5.16-Setup-x64.exe) | Receiver, offline English Vosk model, and official ViGEmBus prerequisite installer |
-| [Android APK](https://github.com/fademan7/mDrive/releases/download/v0.5.16/mDrive-0.5.16.apk) | mDrive phone app for Android 13+ |
-| [SHA-256 checksums](https://github.com/fademan7/mDrive/releases/download/v0.5.16/SHA256SUMS.txt) | Integrity checks for both downloads |
+| [Windows x64 installer](https://github.com/fademan7/mDrive/releases/download/v0.5.17/mDrive-0.5.17-Setup-x64.exe) | Receiver, offline English Vosk model, and official ViGEmBus prerequisite installer |
+| [Android APK](https://github.com/fademan7/mDrive/releases/download/v0.5.17/mDrive-0.5.17.apk) | Non-debuggable mDrive app, signed with the permanent release key |
+| [SHA-256 checksums](https://github.com/fademan7/mDrive/releases/download/v0.5.17/SHA256SUMS.txt) | Integrity checks for both downloads |
 
 1. Exit the game and close any running mDrive receiver before installing the Windows package. Administrator approval may be required. Follow any driver restart request.
-2. Install the APK on your phone. An update must use the same signing key as the installed app; if Android reports a signature mismatch, do not erase the app's data just to retry.
+2. Install the APK on your phone. An update must use the same signing key or a valid signing-key rotation proof; if Android reports a signature mismatch, do not erase the app's data just to retry.
 3. Launch **mDrive** on the PC and phone, then follow the pairing instructions below.
 
-The Windows installer is **not Authenticode-signed**, and the APK uses a **development/debug signature**. This is a preview, not a production-signed release. Do not bypass OS security warnings or disable security/anti-cheat protections.
+The Android APK uses a **permanent release signing key**, not a debug key. The Windows installer is still **not Authenticode-signed**. This remains a preview; signing does not guarantee stability or eliminate platform security checks. Do not bypass OS security warnings or disable security/anti-cheat protections.
+
+Official APKs include Android's proof of signing-key rotation from the previously published debug certificate. Do not uninstall the old app to update: installation should preserve its data on supported Android versions. Independently debug-signed builds do not share this identity. See [signing, migration, and key custody](docs/ANDROID_SIGNING.md) for the public certificate fingerprint and verification limits.
 
 ### Requirements
 
@@ -194,13 +196,13 @@ From the repository root:
 
 ```powershell
 .\tools\build-app-icon.ps1
-.\tools\publish-receiver.ps1 -OutputDirectory release/distribution-0516
-.\tools\prepare-speech-assets.ps1 -OutputDirectory release/distribution-0516
-.\tools\prepare-distribution-notices.ps1 -OutputDirectory release/distribution-0516
+.\tools\publish-receiver.ps1 -OutputDirectory release/distribution-0517
+.\tools\prepare-speech-assets.ps1 -OutputDirectory release/distribution-0517
+.\tools\prepare-distribution-notices.ps1 -OutputDirectory release/distribution-0517
 .\tools\build-installer.ps1 -Compiler 'C:\path\to\Inno Setup 6\ISCC.exe'
 ```
 
-The receiver is self-contained; end users do not need the .NET SDK. The installer output is `release/installer/mDrive-0.5.16-Setup-x64.exe`. Packaging was tested with Inno Setup 6.7.3. Check the compiler's license for your distribution/use. The preparation scripts verify downloaded model/driver hashes and the official driver's signature without installing the driver.
+The receiver is self-contained; end users do not need the .NET SDK. The installer output is `release/installer/mDrive-0.5.17-Setup-x64.exe`. Packaging was tested with Inno Setup 6.7.3. Check the compiler's license for your distribution/use. The preparation scripts verify downloaded model/driver hashes and the official driver's signature without installing the driver.
 
 For just the receiver, run `tools/publish-receiver.ps1`; its default output is `release/receiver/PhoneWheel.Receiver.exe`. That EXE alone does not include the speech-model folder or install ViGEmBus.
 
@@ -216,7 +218,9 @@ cd android
 cd ..
 ```
 
-Output: `android/app/build/outputs/apk/debug/app-debug.apk`. Preserve your signing key for updates; a fresh debug key cannot update an app signed by a different key. Never commit signing keys.
+Output: `android/app/build/outputs/apk/debug/app-debug.apk`, for local development only, **not public distribution**. Preserve your signing key for updates; a fresh debug key cannot update an app signed by a different key. Never commit signing keys.
+
+Official release builds use `tools/build-android-release.ps1` and the maintainer's external signing vault. This runs release tests/lint, signs with the permanent key and migration lineage, and verifies the certificate pin and non-debuggable flag. Only `release/android/mDrive-<version>.apk` is distributed. Missing signing credentials fail the release build instead of falling back to debug signing. Forks can use their own signing identity and package name; see [release signing](docs/ANDROID_SIGNING.md).
 
 Optional developer deployment, with USB debugging enabled and authorized:
 
@@ -245,4 +249,8 @@ Created by **fademan7 / neojshin**.
 
 [Website](https://fademan7.github.io/) · [Email](mailto:neojshin@gmail.com) · [Third-party notices](installer/THIRD-PARTY.txt)
 
-Third-party software and models retain their own licenses and notices. Release binaries live in GitHub Releases; the repository contains source, build scripts, and validation documents.
+## License
+
+mDrive is free and open-source software under the **GNU General Public License version 3 only (GPL-3.0-only)**. See [LICENSE](LICENSE) and [COPYRIGHT](COPYRIGHT). Redistribution of covered modified versions must comply with the GPL, including its corresponding-source requirements. The software is provided without warranty.
+
+Third-party software and models retain their own licenses and notices; this license does not replace theirs. Release binaries live in GitHub Releases alongside access to the matching tagged source and build scripts. Android APKs include the project license in assets, and Windows installations include it in the notices directory.

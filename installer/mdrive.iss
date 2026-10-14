@@ -1,10 +1,10 @@
 #ifndef BundleRoot
-  #define BundleRoot "..\release\distribution-0516"
+  #define BundleRoot "..\release\distribution-0517"
 #endif
 #ifndef DriverRoot
   #define DriverRoot "..\release\prerequisites"
 #endif
-#define Version "0.5.16"
+#define Version "0.5.17"
 [Setup]
 SetupIconFile=..\assets\mdrive.ico
 AppId={{AB9A8312-51C4-4D11-893B-02DD62665F1A}
@@ -27,6 +27,7 @@ WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
 InfoBeforeFile=README.txt
+LicenseFile=..\LICENSE
 CloseApplications=no
 RestartApplications=no
 AppMutex=Local\mDrive.Receiver

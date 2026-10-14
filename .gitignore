@@ -40,3 +40,11 @@ __pycache__/
 *.p12
 *.pfx
 *.pem
+
+# Release signing credentials must never be committed.
+*.pk8
+*.p8
+*.dpapi
+**/keystore.properties
+**/signing.properties
+/signing-private/

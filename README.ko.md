@@ -1,5 +1,7 @@
 > [English / current overview](README.md) · 한국어 안내입니다. 기존 README를 보존한 문서이므로 일부 이전 버전 설명이 포함되어 있습니다. 최신 기능·지원 범위는 영문 README를 기준으로 확인하세요.
 
+> 현재 0.5.17부터 Android 공개 APK는 영구 release key로 서명하며, 기존 공식 debug APK에서 설정을 유지하는 서명 교체 증명을 포함합니다. 프로젝트 라이선스는 **GPL-3.0-only**입니다. [최신 다운로드](https://github.com/fademan7/mDrive/releases/tag/v0.5.17) · [LICENSE](LICENSE) · [서명·백업 안내](docs/ANDROID_SIGNING.md). 아래 본문은 0.5.16 당시의 보존 기록입니다.
+
 # mDrive
 
 Android 휴대전화를 Windows 레이싱 게임용 컨트롤러로 사용하는 프로젝트입니다. 휴대전화를 돌려 조향하고, 화면 왼쪽 브레이크·오른쪽 가속 페달을 조작합니다. **Wendy F1 Engineer**는 F1 UDP 텔레메트리를 읽고 영어 음성 질문에 답하거나 레이스 경고를 알려줍니다.

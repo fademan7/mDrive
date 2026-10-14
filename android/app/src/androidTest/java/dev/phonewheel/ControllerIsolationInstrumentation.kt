@@ -17,6 +17,7 @@ class ControllerIsolationInstrumentation : Instrumentation() {
     private lateinit var args: Bundle
     override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); args = arguments ?: Bundle(); start() }
     override fun onStart() {
+        if (args.getString("signingMigration") == "true") { SigningMigrationTest.run(this, args); return }
         if (args.getString("hapticOnly") == "true") {
             val result=Bundle()
             try {

@@ -1,7 +1,7 @@
-mDrive 0.5.13 third-party components
+mDrive 0.5.17 third-party components
 
 Full license texts are included beside this file. This is a component inventory,
-not a license grant for mDrive itself. Preserve all upstream notices.
+not a replacement for mDrive's GPL-3.0-only license. Preserve all upstream notices.
 
 Vosk API 0.3.38 - Alpha Cephei Inc - Apache-2.0
 https://github.com/alphacep/vosk-api

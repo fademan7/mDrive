@@ -1,9 +1,11 @@
-param([string]$OutputDirectory='release\distribution-0516')
+param([string]$OutputDirectory='release\distribution-0517')
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $destination=Join-Path (Join-Path $root $OutputDirectory) 'notices'
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
 Copy-Item -LiteralPath (Join-Path $root 'installer\THIRD-PARTY.txt') -Destination $destination -Force
+Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination (Join-Path $destination 'mDrive-GPL-3.0.txt') -Force
+Copy-Item -LiteralPath (Join-Path $root 'COPYRIGHT') -Destination $destination -Force
 $sources=@{
     'Vosk-Apache-2.0.txt'='https://raw.githubusercontent.com/alphacep/vosk-api/master/COPYING'
     'ViGEmBus-BSD-3-Clause.txt'='https://raw.githubusercontent.com/nefarius/ViGEmBus/master/LICENSE'

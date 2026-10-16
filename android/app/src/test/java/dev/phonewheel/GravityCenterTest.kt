@@ -18,7 +18,7 @@ class GravityCenterTest {
                 val center = GravityCenter.reference(pose, display)
                 assertNotNull(center)
                 val estimator = SteeringEstimator(); estimator.calibrate(center!!)
-                assertEquals((-roll / 120).coerceIn(-1.0, 1.0).toFloat(), estimator.update(pose, 1L), .0001f)
+                assertEquals((-roll / 90).coerceIn(-1.0, 1.0).toFloat(), estimator.update(pose, 1L), .0001f)
                 assertEquals(0f, estimator.update(level, 10_000_001L), .0001f)
             }
         }

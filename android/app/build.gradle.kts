@@ -19,8 +19,8 @@ android {
         applicationId = "dev.phonewheel"
         minSdk = 33
         targetSdk = 37
-        versionCode = 28
-        versionName = "0.5.17"
+        versionCode = 29
+        versionName = "0.5.18"
         testInstrumentationRunner = "dev.phonewheel.ControllerIsolationInstrumentation"
     }
 

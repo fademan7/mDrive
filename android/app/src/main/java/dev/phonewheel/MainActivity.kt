@@ -139,7 +139,7 @@ class MainActivity : Activity(), SensorEventListener {
         }
     }
     private lateinit var haptics: HapticScheduler
-    private var halfRange = 120.0
+    private var halfRange = 90.0
     private var deadzone = 0.0
     private var smoothingMs = 0.0
     private var responseCurve = 1.0
@@ -369,14 +369,14 @@ class MainActivity : Activity(), SensorEventListener {
     private fun showSteeringDialog() {
         releaseInputs("Steering setup · controls released")
         val fields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(4), dp(20), 0) }
-        val range = labeledField(fields, "Steering half-range (45–180°, lower = more sensitive)", halfRange.toString())
+        val range = labeledField(fields, "Phone angle for full Xbox LX (45–180°)", halfRange.toString())
         val dead = labeledField(fields, "Center deadzone (0–5°)", deadzone.toString())
         val smooth = labeledField(fields, "Sensor smoothing (0–30 ms)", smoothingMs.toString())
         val curve = labeledField(fields, "Response curve (0.6–2.0, 1=linear)", responseCurve.toString())
-        fields.addView(TextView(this).apply { text = "Pedals: bottom 10%=0%, top 10%=100%, linear in between. The white line shows the detected touch.\nDefault steering: 120° each side, curve 1 / deadzone 0 / smoothing 0. Phone 0°=0%, 60°=50%, 120°=100%. Game wheel animation depends on game settings." })
+        fields.addView(TextView(this).apply { text = "Pedals: bottom 10%=0%, top 10%=100%, linear in between. The white line shows the detected touch.\nF1 default: curve 1 / deadzone 0 / smoothing 0. Phone 0°=LX 0%, 45°=50%, 90°=100%, mirrored left/right. Beyond 90°, LX stays at 100% while phone tracking continues through 180°. This is stick input, not the car's wheel angle; game steering assistance still applies." })
         val scroll = ScrollView(this).apply { addView(fields) }
         AlertDialog.Builder(this).setTitle("Steering / pedal settings")
-            .setNeutralButton("Linear 120°") { _, _ -> applySettings("120", "0", "0", "1") }
+            .setNeutralButton("F1 Linear 90°") { _, _ -> applySettings("90", "0", "0", "1") }
             .setView(scroll).setPositiveButton("Apply") { _, _ ->
                 applySettings(range.text.toString(), dead.text.toString(), smooth.text.toString(), curve.text.toString())
             }.setNegativeButton("Cancel", null).show()
@@ -395,19 +395,19 @@ class MainActivity : Activity(), SensorEventListener {
             .putFloat("halfRange180", range.toFloat()).putFloat("deadzone", dead.toFloat()).putFloat("smoothing", smooth.toFloat())
             .putFloat("curve", curve.toFloat()).apply()
         calibrated = false; rebuildEstimator()
-        epoch++; autoDrive.request(true); status.text = "Total ${(range * 2).toInt()}° · preparing auto center"
+        epoch++; autoDrive.request(true); status.text = "Xbox LX full scale at ±${range.toInt()}° · preparing auto center"
     }
 
     private fun loadSettings() {
         val p = getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
         // Requested one-time upgrade, before a controller session is created.
         // Keep all pairing, pedal, layout and Wendy preferences unchanged.
-        if (!p.getBoolean("linear120Applied", false)) {
-            p.edit().putFloat("halfRange180", 120f).putFloat("deadzone", 0f)
+        if (!p.getBoolean("linear90Applied", false)) {
+            p.edit().putFloat("halfRange180", 90f).putFloat("deadzone", 0f)
                 .putFloat("smoothing", 0f).putFloat("curve", 1f)
-                .putBoolean("linear120Applied", true).apply()
+                .putBoolean("linear90Applied", true).apply()
         }
-        halfRange = p.getFloat("halfRange180", 120f).toDouble(); deadzone = p.getFloat("deadzone", 0f).toDouble()
+        halfRange = p.getFloat("halfRange180", 90f).toDouble(); deadzone = p.getFloat("deadzone", 0f).toDouble()
         smoothingMs = p.getFloat("smoothing", 0f).toDouble(); responseCurve = p.getFloat("curve", 1f).toDouble()
     }
 

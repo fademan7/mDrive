@@ -10,7 +10,7 @@ Turn your Android phone into a wireless controller for Windows racing games. Rot
 
 ## Features
 
-- Linear motion steering with a default range of **120 degrees in each direction**.
+- Linear motion steering: **90° phone rotation reaches full Xbox Left Stick X** (Android 0.5.18).
 - Full-height left brake and right throttle surfaces with independent multitouch input.
 - D-pad, ABXY, LB/RB, Back/Start, and a right analog stick for camera control.
 - Adjustable button positions and sizes, steering response, and pedal settings.
@@ -23,7 +23,7 @@ mDrive appears as a **virtual Xbox 360 gamepad**, not a dedicated force-feedback
 
 ## Download and install
 
-Update the PC receiver and Android app together.
+Use the release's recommended PC receiver and Android app versions. The Android-only 0.5.18 steering update is compatible with the existing 0.5.17 receiver; it does not change the protocol or require a receiver restart.
 
 | Download | Contents |
 |---|---|
@@ -77,7 +77,9 @@ USB is not a game-control transport. USB debugging is only useful for developer 
 | Lower-center analog stick | Right Stick — assign camera/look controls in the game |
 | D-pad, ABXY, LB/RB, Back/Start | Corresponding gamepad buttons |
 
-Default steering is linear: **0° = 0%, 60° = 50%, 120° = 100%** in either direction. Rotation beyond that range is clamped. Use **mDrive → Steering / pedals** to adjust the range and response; saved settings may differ from the defaults.
+Android 0.5.18 defaults to linear Xbox Left Stick X input: **0° = 0%, 45° = 50%, 90° = 100%**, mirrored in the opposite direction. At 120° and 180° the stick remains at 100%. Quaternion sensor tracking continues through ±180° independently; only the output is saturated. Phone rotation does **not** specify the car's steering-wheel angle. No speed- or telemetry-based correction is applied by mDrive.
+
+The first 0.5.18 launch applies this preset once (curve 1, deadzone 0, smoothing 0), without changing pairing, pedals, layout, or Wendy settings. Later custom steering settings are retained. Use **mDrive → Steering / pedals → F1 Linear 90°** to restore it. The driving display shows accumulated **Phone** angle and normalized **LX** (-1.00 to +1.00) together. Published Android 0.5.17 uses the previous 120° default.
 
 For the pedals, the point 10% above the bottom is 0%, and the point 10% below the top is 100%. The usable middle section is linear, giving fingers room at both ends. Brake and throttle can be held together.
 

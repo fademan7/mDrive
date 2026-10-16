@@ -14,7 +14,9 @@ data class Quaternion(val w: Double, val x: Double, val y: Double, val z: Double
 }
 
 class SteeringEstimator(
-    private val halfRange: Double = 120.0,
+    // Phone angle for full-scale Xbox Left Stick X, NOT a tracking limit or
+    // the car's steering-wheel angle. Tracking continues beyond this value.
+    private val halfRange: Double = 90.0,
     private val deadzone: Double = 0.0,
     private val sign: Double = -1.0,
     private val smoothingMs: Double = 0.0,
@@ -61,6 +63,8 @@ class SteeringEstimator(
         }
         angleDegrees += delta
         previousWrapped = wrapped
+        // Saturate only the output. Never clamp/wrap the accumulated angle:
+        // returning from 180 to 120 must still output full stick at the default.
         val angle = angleDegrees
         val linear = ((abs(angle) - deadzone).coerceAtLeast(0.0) / (halfRange - deadzone)).coerceAtMost(1.0)
         val magnitude = linear.pow(responseCurve)

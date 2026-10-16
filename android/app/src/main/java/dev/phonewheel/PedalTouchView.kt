@@ -391,7 +391,7 @@ class PedalTouchView(context: Context) : View(context) {
         canvas.drawCircle(x, y, 7f * resources.displayMetrics.density, paint)
         paint.textAlign = Paint.Align.CENTER
         paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
-        canvas.drawText("Steering ${steeringAngle.toInt()}° · ${(steering * 100).toInt()}%", width * .365f, y - (paint.ascent() + paint.descent()) / 2f, paint)
+        canvas.drawText(String.format(java.util.Locale.US, "Phone %.0f° · LX %+.2f", steeringAngle, steering), width * .365f, y - (paint.ascent() + paint.descent()) / 2f, paint)
     }
 
     private fun saveLayout() {

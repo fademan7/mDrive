@@ -4,9 +4,9 @@ Turn your Android phone into a wireless controller for Windows racing games. Rot
 
 **Wendy F1 Engineer** adds English voice questions, telemetry-based race updates, and driving guidance for **F1 25 / 2026 Season Pack**. Wendy is optional: the controller works without it.
 
-**Current version: 0.5.17 Preview** · Windows x64 + Android 13 or later · Wi-Fi only · **GPL-3.0-only**
+**Current version: Android 0.5.18 / Windows 0.5.17 Preview** · Windows x64 + Android 13 or later · Wi-Fi only · **GPL-3.0-only**
 
-[Download](https://github.com/fademan7/mDrive/releases/tag/v0.5.17) · [한국어 안내](README.ko.md) · [Release notes](docs/RELEASE_0517.md) · [License](LICENSE)
+[Download](https://github.com/fademan7/mDrive/releases/tag/v0.5.18) · [한국어 안내](README.ko.md) · [Release notes](docs/RELEASE_0518.md) · [License](LICENSE)
 
 ## Features
 
@@ -28,8 +28,9 @@ Use the release's recommended PC receiver and Android app versions. The Android-
 | Download | Contents |
 |---|---|
 | [Windows x64 installer](https://github.com/fademan7/mDrive/releases/download/v0.5.17/mDrive-0.5.17-Setup-x64.exe) | Receiver, offline English Vosk model, and official ViGEmBus prerequisite installer |
-| [Android APK](https://github.com/fademan7/mDrive/releases/download/v0.5.17/mDrive-0.5.17.apk) | Non-debuggable mDrive app, signed with the permanent release key |
-| [SHA-256 checksums](https://github.com/fademan7/mDrive/releases/download/v0.5.17/SHA256SUMS.txt) | Integrity checks for both downloads |
+| [Android 0.5.18 APK](https://github.com/fademan7/mDrive/releases/download/v0.5.18/mDrive-0.5.18.apk) | Non-debuggable mDrive app, signed with the permanent release key |
+| [APK SHA-256 checksum](https://github.com/fademan7/mDrive/releases/download/v0.5.18/SHA256SUMS.txt) | Integrity check for Android 0.5.18 |
+| [Windows SHA-256 checksum](https://github.com/fademan7/mDrive/releases/download/v0.5.17/SHA256SUMS.txt) | Use the Windows installer entry in the 0.5.17 checksum file |
 
 1. Exit the game and close any running mDrive receiver before installing the Windows package. Administrator approval may be required. Follow any driver restart request.
 2. Install the APK on your phone. An update must use the same signing key or a valid signing-key rotation proof; if Android reports a signature mismatch, do not erase the app's data just to retry.
